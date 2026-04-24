@@ -1,17 +1,18 @@
-//
-//  MewtApp.swift
-//  Mewt
-//
-//  Created by Ninja on 23/4/2569 BE.
-//
-
 import SwiftUI
 
 @main
 struct MewtApp: App {
+    @State private var appState = AppState()
+
     var body: some Scene {
-        WindowGroup {
+        MenuBarExtra {
             ContentView()
+                .environment(appState)
+        } label: {
+            Image(systemName: appState.isTalkingWhileMuted
+                  ? "exclamationmark.triangle.fill"
+                  : (appState.isMuted ? "mic.slash.fill" : "mic.fill"))
         }
+        .menuBarExtraStyle(.window)
     }
 }
