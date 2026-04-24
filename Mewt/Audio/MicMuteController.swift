@@ -4,18 +4,29 @@ import os
 
 final class MicMuteController {
     private let log = Logger(subsystem: "com.chaninlaw.Mewt", category: "MicMute")
-    private var savedVolume: Float = 1.0
-    private var isObserving = false
+    private var savedVolumes: [AudioDeviceID: Float] = [:]
+    private var isObservingDefault = false
+    private var isObservingDevices = false
 
+    /// Fires when the default input device changes OR the device topology changes
+    /// (hot-plug, AirPods connect/disconnect, etc.). Consumer should re-apply intended
+    /// mute state — the set of muted devices may have shifted.
     var onDefaultDeviceChanged: (() -> Void)?
 
     deinit {
-        if isObserving {
-            var address = Self.defaultInputDeviceAddress
+        if isObservingDefault {
+            var a = Self.defaultInputDeviceAddress
             AudioObjectRemovePropertyListener(
-                AudioObjectID(kAudioObjectSystemObject),
-                &address,
-                Self.deviceChangeListener,
+                AudioObjectID(kAudioObjectSystemObject), &a,
+                Self.topologyListener,
+                Unmanaged.passUnretained(self).toOpaque()
+            )
+        }
+        if isObservingDevices {
+            var a = Self.devicesAddress
+            AudioObjectRemovePropertyListener(
+                AudioObjectID(kAudioObjectSystemObject), &a,
+                Self.topologyListener,
                 Unmanaged.passUnretained(self).toOpaque()
             )
         }
@@ -23,43 +34,76 @@ final class MicMuteController {
 
     // MARK: - Public API
 
-    func mute() {
-        guard let deviceID = Self.defaultInputDeviceID() else {
-            log.error("No default input device")
-            return
+    /// Mute every connected input device. Apps that pinned to a specific device
+    /// (e.g. Chrome/WebRTC that doesn't hot-migrate on default-device change) are
+    /// silenced regardless of which device they're reading from.
+    @discardableResult
+    func mute() -> Bool {
+        let devices = Self.allInputDeviceIDs()
+        var anySuccess = false
+        for deviceID in devices {
+            let muteOK = setMuteAllElements(deviceID: deviceID, value: 1)
+            if let current = Self.inputVolume(deviceID: deviceID), current > 0.001 {
+                savedVolumes[deviceID] = current
+            }
+            let volOK = Self.setInputVolume(deviceID: deviceID, volume: 0)
+            if muteOK || volOK { anySuccess = true }
         }
-        if let current = Self.inputVolume(deviceID: deviceID), current > 0.001 {
-            savedVolume = current
-        }
-        _ = Self.setInputVolume(deviceID: deviceID, volume: 0)
-        log.info("Muted (saved volume: \(self.savedVolume))")
+        log.info("mute over \(devices.count) device(s) anySuccess=\(anySuccess)")
+        return anySuccess
     }
 
-    func unmute() {
-        guard let deviceID = Self.defaultInputDeviceID() else { return }
-        _ = Self.setInputVolume(deviceID: deviceID, volume: savedVolume)
-        log.info("Unmuted (restored to: \(self.savedVolume))")
-    }
-
-    func applyMute() {
-        guard let deviceID = Self.defaultInputDeviceID() else { return }
-        _ = Self.setInputVolume(deviceID: deviceID, volume: 0)
+    @discardableResult
+    func unmute() -> Bool {
+        let devices = Self.allInputDeviceIDs()
+        var anySuccess = false
+        for deviceID in devices {
+            let muteOK = setMuteAllElements(deviceID: deviceID, value: 0)
+            let target = savedVolumes[deviceID] ?? 1.0
+            let volOK = Self.setInputVolume(deviceID: deviceID, volume: target)
+            if muteOK || volOK { anySuccess = true }
+        }
+        log.info("unmute over \(devices.count) device(s) anySuccess=\(anySuccess)")
+        return anySuccess
     }
 
     func startObservingDeviceChange() {
-        guard !isObserving else { return }
-        var address = Self.defaultInputDeviceAddress
-        let status = AudioObjectAddPropertyListener(
-            AudioObjectID(kAudioObjectSystemObject),
-            &address,
-            Self.deviceChangeListener,
-            Unmanaged.passUnretained(self).toOpaque()
-        )
-        if status == noErr {
-            isObserving = true
-        } else {
-            log.error("Failed to install device change listener: \(status)")
+        if !isObservingDefault {
+            var a = Self.defaultInputDeviceAddress
+            let status = AudioObjectAddPropertyListener(
+                AudioObjectID(kAudioObjectSystemObject), &a,
+                Self.topologyListener,
+                Unmanaged.passUnretained(self).toOpaque()
+            )
+            if status == noErr { isObservingDefault = true }
+            else { log.error("default-device listener install failed: \(status)") }
         }
+        if !isObservingDevices {
+            var a = Self.devicesAddress
+            let status = AudioObjectAddPropertyListener(
+                AudioObjectID(kAudioObjectSystemObject), &a,
+                Self.topologyListener,
+                Unmanaged.passUnretained(self).toOpaque()
+            )
+            if status == noErr { isObservingDevices = true }
+            else { log.error("devices-list listener install failed: \(status)") }
+        }
+    }
+
+    // MARK: - Mute property helpers
+
+    private func setMuteAllElements(deviceID: AudioDeviceID, value: UInt32) -> Bool {
+        var anySuccess = false
+        if Self.setMuteElement(deviceID: deviceID, element: kAudioObjectPropertyElementMain, value: value) {
+            anySuccess = true
+        }
+        let count = Self.channelCount(deviceID: deviceID)
+        if count > 0 {
+            for ch in 1...count where Self.setMuteElement(deviceID: deviceID, element: ch, value: value) {
+                anySuccess = true
+            }
+        }
+        return anySuccess
     }
 
     // MARK: - CoreAudio helpers
@@ -70,7 +114,13 @@ final class MicMuteController {
         mElement: kAudioObjectPropertyElementMain
     )
 
-    private static let deviceChangeListener: AudioObjectPropertyListenerProc = {
+    private static var devicesAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyDevices,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+    )
+
+    private static let topologyListener: AudioObjectPropertyListenerProc = {
         _, _, _, clientData in
         guard let clientData else { return noErr }
         let controller = Unmanaged<MicMuteController>.fromOpaque(clientData).takeUnretainedValue()
@@ -80,21 +130,35 @@ final class MicMuteController {
         return noErr
     }
 
-    private static func defaultInputDeviceID() -> AudioDeviceID? {
-        var deviceID = AudioDeviceID(0)
-        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-        var address = defaultInputDeviceAddress
-        let status = AudioObjectGetPropertyData(
-            AudioObjectID(kAudioObjectSystemObject),
-            &address,
-            0, nil,
-            &size,
-            &deviceID
-        )
-        return status == noErr && deviceID != 0 ? deviceID : nil
+    /// Every connected audio device that reports at least one input channel.
+    private static func allInputDeviceIDs() -> [AudioDeviceID] {
+        var addr = devicesAddress
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size) == noErr,
+              size > 0 else { return [] }
+        let count = Int(size) / MemoryLayout<AudioDeviceID>.size
+        var ids = [AudioDeviceID](repeating: 0, count: count)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size, &ids) == noErr else {
+            return []
+        }
+        return ids.filter { channelCount(deviceID: $0) > 0 }
     }
 
-    /// Try master element first; fall back to averaging per-channel values.
+    private static func setMuteElement(deviceID: AudioDeviceID, element: AudioObjectPropertyElement, value: UInt32) -> Bool {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyMute,
+            mScope: kAudioDevicePropertyScopeInput,
+            mElement: element
+        )
+        guard AudioObjectHasProperty(deviceID, &addr) else { return false }
+        var isSettable: DarwinBoolean = false
+        guard AudioObjectIsPropertySettable(deviceID, &addr, &isSettable) == noErr,
+              isSettable.boolValue else { return false }
+        var v = value
+        let status = AudioObjectSetPropertyData(deviceID, &addr, 0, nil, UInt32(MemoryLayout<UInt32>.size), &v)
+        return status == noErr
+    }
+
     private static func inputVolume(deviceID: AudioDeviceID) -> Float? {
         if let v = scalarVolume(deviceID: deviceID, element: kAudioObjectPropertyElementMain) {
             return v
@@ -115,18 +179,17 @@ final class MicMuteController {
     @discardableResult
     private static func setInputVolume(deviceID: AudioDeviceID, volume: Float) -> Bool {
         let clamped = max(0, min(1, volume))
+        var anySuccess = false
         if setScalarVolume(deviceID: deviceID, element: kAudioObjectPropertyElementMain, value: clamped) {
-            return true
+            anySuccess = true
         }
-        var success = false
         let count = channelCount(deviceID: deviceID)
-        if count == 0 { return false }
-        for ch in 1...count {
-            if setScalarVolume(deviceID: deviceID, element: ch, value: clamped) {
-                success = true
+        if count > 0 {
+            for ch in 1...count where setScalarVolume(deviceID: deviceID, element: ch, value: clamped) {
+                anySuccess = true
             }
         }
-        return success
+        return anySuccess
     }
 
     private static func scalarVolume(deviceID: AudioDeviceID, element: AudioObjectPropertyElement) -> Float? {
@@ -154,7 +217,6 @@ final class MicMuteController {
               isSettable.boolValue else {
             return false
         }
-
         var v = value
         let status = AudioObjectSetPropertyData(deviceID, &addr, 0, nil, UInt32(MemoryLayout<Float>.size), &v)
         return status == noErr

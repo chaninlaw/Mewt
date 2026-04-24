@@ -9,10 +9,18 @@ struct MewtApp: App {
             ContentView()
                 .environment(appState)
         } label: {
-            Image(systemName: appState.isTalkingWhileMuted
-                  ? "exclamationmark.triangle.fill"
-                  : (appState.isMuted ? "mic.slash.fill" : "mic.fill"))
+            Image(systemName: menuBarSymbol)
         }
         .menuBarExtraStyle(.window)
+
+        Settings {
+            SettingsView()
+        }
+    }
+
+    private var menuBarSymbol: String {
+        if appState.pttActive { return "mic.badge.plus" }
+        if appState.isTalkingWhileMuted { return "exclamationmark.triangle.fill" }
+        return appState.isMuted ? "mic.slash.fill" : "mic.fill"
     }
 }
