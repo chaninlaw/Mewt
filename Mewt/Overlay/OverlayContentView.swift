@@ -10,5 +10,14 @@ struct OverlayContentView: View {
     var body: some View {
         MascotFace(pose: .from(appState.status), size: 64)
             .padding(16)
+            // Group the mascot + its padding into a single VoiceOver
+            // element. Without this, `MascotFace` exposes its own
+            // accessibility label but VoiceOver users still wouldn't
+            // know the panel is interactive — the click handler lives
+            // on the AppKit tracker view, not in SwiftUI.
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Mewt mascot, \(appState.status.label)")
+            .accessibilityHint("Click to toggle mute, drag to reposition")
+            .accessibilityAddTraits(.isButton)
     }
 }

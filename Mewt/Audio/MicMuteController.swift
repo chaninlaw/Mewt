@@ -34,6 +34,10 @@ enum DefaultInputTransport: Equatable {
 
 final class MicMuteController: MicMuteControlling {
     private let log = Logger(subsystem: "com.chaninlaw.Mewt", category: "MicMute")
+    /// Static helpers (`setMuteElement`, `setScalarVolume`, …) can't
+    /// reach the instance-level `log`, so they share this one. Marked
+    /// `nonisolated` so deinit / C-callback contexts can use it.
+    nonisolated fileprivate static let sharedLog = Logger(subsystem: "com.chaninlaw.Mewt", category: "MicMute")
     private var savedVolumes: [AudioDeviceID: Float] = [:]
     private var isObservingDefault = false
     private var isObservingDevices = false
@@ -229,6 +233,14 @@ final class MicMuteController: MicMuteControlling {
               isSettable.boolValue else { return false }
         var v = value
         let status = AudioObjectSetPropertyData(deviceID, &addr, 0, nil, UInt32(MemoryLayout<UInt32>.size), &v)
+        if status != noErr {
+            // Surface the OSStatus so a "talk-while-muted regression"
+            // bug report has something to grep for in Console — without
+            // this, every CoreAudio failure was silent.
+            sharedLog.error(
+                "setMute failed device=\(deviceID, privacy: .public) element=\(element, privacy: .public) status=\(status, privacy: .public)"
+            )
+        }
         return status == noErr
     }
 
@@ -292,6 +304,11 @@ final class MicMuteController: MicMuteControlling {
         }
         var v = value
         let status = AudioObjectSetPropertyData(deviceID, &addr, 0, nil, UInt32(MemoryLayout<Float>.size), &v)
+        if status != noErr {
+            sharedLog.error(
+                "setVolume failed device=\(deviceID, privacy: .public) element=\(element, privacy: .public) status=\(status, privacy: .public)"
+            )
+        }
         return status == noErr
     }
 
@@ -323,20 +340,23 @@ final class MicMuteController: MicMuteControlling {
     }
 
     private static func deviceName(deviceID: AudioDeviceID) -> String? {
+        // CoreAudio writes a +1-retained `CFString` into the out-param
+        // for `kAudioObjectPropertyName`, so we receive an
+        // `Unmanaged<CFString>` and balance the retain by taking the
+        // retained value. Using `Unmanaged` directly side-steps the
+        // pointer-rebinding gymnastics that an optional `CFString?`
+        // out-param would otherwise require, and keeps the ownership
+        // contract explicit.
         var addr = AudioObjectPropertyAddress(
             mSelector: kAudioObjectPropertyName,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        var size = UInt32(MemoryLayout<CFString?>.size)
-        var name: CFString?
-        let status = withUnsafeMutablePointer(to: &name) { ptr -> OSStatus in
-            UnsafeMutableRawPointer(ptr).withMemoryRebound(to: UInt8.self, capacity: Int(size)) { _ in
-                AudioObjectGetPropertyData(deviceID, &addr, 0, nil, &size, ptr)
-            }
-        }
-        guard status == noErr, let cf = name else { return nil }
-        return cf as String
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        var name: Unmanaged<CFString>?
+        let status = AudioObjectGetPropertyData(deviceID, &addr, 0, nil, &size, &name)
+        guard status == noErr, let unmanaged = name else { return nil }
+        return unmanaged.takeRetainedValue() as String
     }
 
     private static func channelCount(deviceID: AudioDeviceID) -> UInt32 {

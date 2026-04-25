@@ -27,6 +27,8 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity)
             }
             .controlSize(.large)
+            .accessibilityLabel(appState.isMuted ? "Unmute microphone" : "Mute microphone")
+            .accessibilityValue(appState.status.label)
 
             HotkeyHintsView()
 
@@ -45,7 +47,7 @@ struct ContentView: View {
                 Button("Settings…") { openSettings() }
                     .keyboardShortcut(",")
                 Spacer()
-                Button("Quit") { appState.quit() }
+                Button("Quit", role: .destructive) { appState.quit() }
                     .keyboardShortcut("q")
             }
         }

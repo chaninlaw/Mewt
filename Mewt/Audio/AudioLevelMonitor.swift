@@ -14,6 +14,18 @@ enum AudioLevelMonitorError: Error {
     /// detection requires a mic; the rest of Mewt (mute, hotkeys,
     /// overlay) still works without the level tap.
     case noInputDevice
+
+    /// The user has not granted the app microphone permission, or has
+    /// explicitly denied it. Surfaced separately so the UI can prompt
+    /// the user to grant access in System Settings instead of showing a
+    /// generic failure.
+    case permissionDenied
+
+    /// `AVAudioEngine.start()` failed for some other reason (resource
+    /// busy, format mismatch on the rebound, audio service crashed).
+    /// Wraps the underlying error so the caller can log it without
+    /// having to reinterpret the failure.
+    case engineStartFailed(any Error)
 }
 
 /// Taps the system input node to measure RMS amplitude. Drives the
@@ -67,6 +79,23 @@ final class AudioLevelMonitor: AudioLevelMonitoring {
     func start() throws {
         guard !running else { return }
 
+        // Probe TCC for mic access before we touch AVAudioEngine — the
+        // engine returns the same generic `OSStatus = -10851` whether
+        // the user denied permission or the format is wrong, so we
+        // can't distinguish the two from the engine's error alone.
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .denied, .restricted:
+            log.warning("Microphone permission denied; skipping tap install")
+            throw AudioLevelMonitorError.permissionDenied
+        case .authorized, .notDetermined:
+            // `.notDetermined` lets AVAudioEngine prompt the user on
+            // first run; if they decline we'll catch it on the next
+            // start() via `.denied`.
+            break
+        @unknown default:
+            break
+        }
+
         let input = engine.inputNode
         // `inputFormat(forBus:0)` reflects the actual hardware format. If
         // no default input device is connected (no mic, no AirPods), the
@@ -93,7 +122,15 @@ final class AudioLevelMonitor: AudioLevelMonitoring {
         }
 
         engine.prepare()
-        try engine.start()
+        do {
+            try engine.start()
+        } catch {
+            // Tear the tap back down so a retry from `AppState` doesn't
+            // hit "tap already installed" on the next `start()`.
+            input.removeTap(onBus: 0)
+            log.error("AVAudioEngine.start() failed: \(error.localizedDescription, privacy: .public)")
+            throw AudioLevelMonitorError.engineStartFailed(error)
+        }
         running = true
         log.info("AudioLevelMonitor started")
     }
@@ -118,8 +155,13 @@ final class AudioLevelMonitor: AudioLevelMonitoring {
         running = false
         do {
             try start()
+        } catch AudioLevelMonitorError.noInputDevice {
+            // Default input was yanked out from under us; nothing to
+            // do — `AppState.refreshTalkDetectionOnly` will pick this
+            // up via the device-change listener.
+            log.info("Skipping tap restart: no input device after config change")
         } catch {
-            log.error("Failed to restart engine after config change: \(String(describing: error))")
+            log.error("Failed to restart engine after config change: \(error.localizedDescription, privacy: .public)")
         }
     }
 

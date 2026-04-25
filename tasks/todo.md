@@ -6,11 +6,52 @@
 2. ✅ **Phase 1** — Global hotkey ⌥M / PTT ⌥Space + Settings, hybrid mute across AirPods/built-in/USB (`253622d`)
 3. ✅ **Pre-Phase 2** — `MicStatus` enum + `MuteStateMachine` + `TalkingDebouncer` extract, DI refactor, 43 tests (`c670b91`)
 4. ✅ **Phase 2** — Static mascot face + right-click tray quick toggle, 60 tests (`c925135`)
-5. ✅ **Phase 3** — Floating overlay window — *this commit*
-6. ⏭ **Phase 4** — Animated pets + StoreKit 2 IAP
+5. ✅ **Phase 3** — Floating overlay window (`0c0f30e`)
+6. 🛠 **Phase 3.5 — Code-quality pass** *(in progress)*
+7. ⏭ **Phase 4** — Animated pets + StoreKit 2 IAP
 
 Plans: `docs/plans/phase-1-global-hotkey.md`, `docs/plans/phase-3-floating-overlay.md`
 Lessons: `tasks/lessons.md`
+
+---
+
+## Phase 3.5 — Code-quality pass (Swift best practice + error handling)
+
+**Goal:** ปรับปรุง error categorization ให้ถูกต้อง ไม่กลืน failure mode ผิด, ลด CoreAudio unsafe pointer code, เพิ่ม diagnostic logs, ขัด accessibility ของ UI surfaces — โดยไม่เปลี่ยนพฤติกรรม happy-path
+
+### Scope (delivered)
+
+- [x] **Error handling fix** — `AudioLevelMonitor` แยก `permissionDenied` / `engineStartFailed(Error)` ออกจาก `noInputDevice`; probe `AVCaptureDevice.authorizationStatus(for: .audio)` ก่อน throw permission error; tap removed before re-throw on engine.start() failure (no leaked tap state for retry)
+- [x] **AppState mapping** — ลบ catch-all "Mic permission needed" ที่ misattribute non-permission failure; เพิ่ม helper `talkDetectionStatus(for:)` แทน duplication ระหว่าง `startLevelMonitor` กับ `refreshTalkDetectionOnly`; `refreshTalkDetectionOnly` ตอนนี้เคารพ `.permissionDenied` ที่ sticky (device hot-plug ห้ามเขียนทับ)
+- [x] **MicMuteController cleanup** — แทนที่ `withMemoryRebound(to: UInt8.self, capacity:)` no-op ด้วย idiomatic `Unmanaged<CFString>` pattern (retain ownership ชัดเจน); เพิ่ม `sharedLog` static + log OSStatus failures ใน `setMuteElement` / `setScalarVolume` ผ่าน `.error` privacy `.public` — มอง Console ออกถ้า talk-while-muted regress
+- [x] **Accessibility polish** — Quit button = `role: .destructive`; mute button = `accessibilityLabel` + `accessibilityValue` (state); `OverlayContentView` = `combine` children + label จาก mascot pose + `isButton` trait + hint
+- [x] **Verify** — `xcodebuild build` clean + **83 tests ผ่าน** (เพิ่ม `deviceChangePreservesPermissionDenied` invariant)
+
+### Files touched
+
+| File | Change |
+|---|---|
+| `Mewt/Audio/AudioLevelMonitor.swift` | +`permissionDenied`, +`engineStartFailed(Error)`, TCC probe, tap rollback on engine fail, log restart errors with privacy `.public` |
+| `Mewt/State/AppState.swift` | +`Logger`, +static `talkDetectionStatus(for:)`, route per-error catch arms, sticky-permission guard in `refreshTalkDetectionOnly` |
+| `Mewt/Audio/MicMuteController.swift` | `Unmanaged<CFString>` for `deviceName`, +`sharedLog`, log OSStatus on `setMute` / `setVolume` failures |
+| `Mewt/ContentView.swift` | mute-button `accessibilityLabel`/`Value`, Quit `role: .destructive` |
+| `Mewt/Overlay/OverlayContentView.swift` | accessibility group + state-aware label + button trait + hint |
+| `MewtTests/AppStateTests.swift` | +1 test for `refreshTalkDetectionOnly` permission invariant |
+
+### Status: ✅ Verified
+
+`xcodebuild build` succeeded; full test suite green (83/83, 0.038s)
+
+### Constraints upheld
+
+- Public surface of `AppState` unchanged → existing tests untouched
+- Phase 2/3 verified flows preserved (mute, PTT, overlay drag, persistence)
+- `XCTestConfigurationFilePath` env guard pattern intact
+
+### Notes for next phase
+
+- Engine-start error wrapper means `AppState` can now show distinct messages for "no mic", "permission denied", "engine unavailable" — Settings could expose a "Re-grant permission" deep link to System Settings when `talkDetection == .permissionDenied`. Out of scope here; flag for Phase 4 onboarding work.
+- `MicMuteController` failure logs are subsystem `com.chaninlaw.Mewt` category `MicMute` — `log stream --predicate 'subsystem == "com.chaninlaw.Mewt"'` will surface them next time the talk-while-muted USB-leak issue is triaged.
 
 ---
 

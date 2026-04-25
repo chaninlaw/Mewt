@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Observation
+import os
 
 @Observable
 @MainActor
@@ -16,6 +17,7 @@ final class AppState {
     var talkDetection: TalkDetectionStatus = .unavailable
 
     private var muteState = MuteStateMachine()
+    private let log = Logger(subsystem: "com.chaninlaw.Mewt", category: "AppState")
 
     var isMuted: Bool { muteState.physicalMuted }
     var pttActive: Bool { muteState.pttActive }
@@ -85,20 +87,46 @@ final class AppState {
         levelMonitor.stop()
         do {
             try levelMonitor.start()
-            switch muteController.defaultInputTransport() {
-            case .wired:
-                talkDetection = .active
-            case .bluetooth(let name):
-                talkDetection = .disabledByBluetooth(deviceName: name)
-            case .absent:
-                talkDetection = .unavailable
-            }
+            talkDetection = Self.talkDetectionStatus(for: muteController.defaultInputTransport())
         } catch AudioLevelMonitorError.noInputDevice {
             talkDetection = .unavailable
             statusMessage = "No microphone detected"
-        } catch {
+        } catch AudioLevelMonitorError.permissionDenied {
             talkDetection = .permissionDenied
             statusMessage = "Mic permission needed"
+        } catch AudioLevelMonitorError.engineStartFailed(let underlying) {
+            // Engine couldn't start for a non-permission reason
+            // (resource busy, format mismatch on the rebound, audio
+            // service crashed). Talk detection stays off until the
+            // user does something that triggers a config change
+            // (replug, switch device).
+            log.error("Level monitor engine start failed: \(underlying.localizedDescription, privacy: .public)")
+            talkDetection = .unavailable
+            statusMessage = "Mic listener unavailable"
+        } catch {
+            // Defensive — current AudioLevelMonitor only throws the
+            // three cases above, but keep the catch-all so future
+            // additions don't silently drop into a misleading state.
+            log.error("Level monitor failed: \(error.localizedDescription, privacy: .public)")
+            talkDetection = .unavailable
+            statusMessage = "Mic listener unavailable"
+        }
+    }
+
+    /// Pure mapping from a CoreAudio transport snapshot to the UI-level
+    /// `TalkDetectionStatus`. Centralising it here keeps
+    /// `startLevelMonitor` and `refreshTalkDetectionOnly` from drifting
+    /// out of sync.
+    private static func talkDetectionStatus(
+        for transport: DefaultInputTransport
+    ) -> TalkDetectionStatus {
+        switch transport {
+        case .wired:
+            return .active
+        case .bluetooth(let name):
+            return .disabledByBluetooth(deviceName: name)
+        case .absent:
+            return .unavailable
         }
     }
 
@@ -130,14 +158,12 @@ final class AppState {
     /// path lets device-change tests still verify that `talkDetection`
     /// updates correctly.
     private func refreshTalkDetectionOnly() {
-        switch muteController.defaultInputTransport() {
-        case .wired:
-            talkDetection = .active
-        case .bluetooth(let name):
-            talkDetection = .disabledByBluetooth(deviceName: name)
-        case .absent:
-            talkDetection = .unavailable
-        }
+        // Don't clobber `permissionDenied` — that's a sticky state that
+        // only changes when the user grants access in System Settings,
+        // which fires its own re-launch path. A device hot-plug doesn't
+        // reset it.
+        if talkDetection == .permissionDenied { return }
+        talkDetection = Self.talkDetectionStatus(for: muteController.defaultInputTransport())
     }
 
     func toggleMute() {
