@@ -8,6 +8,28 @@ protocol MicMuteControlling: AnyObject {
     @discardableResult func mute() -> Bool
     @discardableResult func unmute() -> Bool
     func startObservingDeviceChange()
+    /// Snapshot of the current default input device's transport type.
+    /// Used by `AppState` to decide whether talk-while-muted detection
+    /// can run (Bluetooth uses HAL mute which silences our tap).
+    func defaultInputTransport() -> DefaultInputTransport
+}
+
+/// Classification of the current default input device.
+enum DefaultInputTransport: Equatable {
+    /// Built-in mic, USB / Thunderbolt interface, anything that
+    /// respects `kAudioDevicePropertyVolumeScalar = 0` so other apps
+    /// receive silence while AVAudioEngine's tap still reads pre-volume
+    /// data — talk-while-muted detection works.
+    case wired
+
+    /// Bluetooth (AirPods, Bluetooth headset). HFP drivers ignore
+    /// volume scaling, so we have to use HAL `kAudioDevicePropertyMute`
+    /// to silence them — which also silences our tap. Detection is
+    /// off until the user switches to a wired input.
+    case bluetooth(deviceName: String?)
+
+    /// No default input device connected.
+    case absent
 }
 
 final class MicMuteController: MicMuteControlling {
@@ -45,16 +67,38 @@ final class MicMuteController: MicMuteControlling {
     /// Mute every connected input device. Apps that pinned to a specific device
     /// (e.g. Chrome/WebRTC that doesn't hot-migrate on default-device change) are
     /// silenced regardless of which device they're reading from.
+    ///
+    /// **Hybrid strategy** (Phase 3, revised after empirical testing):
+    /// - **Bluetooth** (AirPods / HFP): apply `kAudioDevicePropertyMute = 1`
+    ///   *and* `kAudioDevicePropertyVolumeScalar = 0`. HFP drivers ignore
+    ///   volume scaling so HAL mute is required for reliable silencing.
+    ///   Side-effect: `AVAudioEngine` tap is silenced too — no detection
+    ///   while AirPods are the default input.
+    /// - **Wired** (built-in / USB / Thunderbolt): apply only HAL mute
+    ///   (`mute = 1`). We deliberately leave the volume alone, because
+    ///   on at least some external USB interfaces a `volume = 0` setting
+    ///   silences our `AVAudioEngine` tap even though the rest of the
+    ///   pipeline still reads it. Keeping volume non-zero lets the tap
+    ///   pick up speech for talk-while-muted detection.
+    ///
+    /// Trade-off acknowledged: a quirky USB device that doesn't honor
+    /// HAL mute will leak audio. The previous belt-and-suspenders
+    /// approach silenced *that* edge case, but at the cost of also
+    /// silencing the tap, breaking the talk-while-muted alert
+    /// universally — the bigger user-visible regression.
     @discardableResult
     func mute() -> Bool {
         let devices = Self.allInputDeviceIDs()
         var anySuccess = false
         for deviceID in devices {
             let muteOK = setMuteAllElements(deviceID: deviceID, value: 1)
-            if let current = Self.inputVolume(deviceID: deviceID), current > 0.001 {
-                savedVolumes[deviceID] = current
+            var volOK = false
+            if Self.isBluetoothInput(deviceID: deviceID) {
+                if let current = Self.inputVolume(deviceID: deviceID), current > 0.001 {
+                    savedVolumes[deviceID] = current
+                }
+                volOK = Self.setInputVolume(deviceID: deviceID, volume: 0)
             }
-            let volOK = Self.setInputVolume(deviceID: deviceID, volume: 0)
             if muteOK || volOK { anySuccess = true }
         }
         log.info("mute over \(devices.count) device(s) anySuccess=\(anySuccess)")
@@ -66,13 +110,34 @@ final class MicMuteController: MicMuteControlling {
         let devices = Self.allInputDeviceIDs()
         var anySuccess = false
         for deviceID in devices {
+            // Always clear `mute = 0` regardless of transport — covers
+            // the case where a device was Bluetooth at mute time and
+            // wired now (or vice versa); leaves no device stuck muted.
             let muteOK = setMuteAllElements(deviceID: deviceID, value: 0)
-            let target = savedVolumes[deviceID] ?? 1.0
-            let volOK = Self.setInputVolume(deviceID: deviceID, volume: target)
+            // Only restore volume on devices we actually zeroed
+            // (Bluetooth path). Touching volume on wired devices would
+            // wipe whatever the user had it set to.
+            var volOK = false
+            if let target = savedVolumes[deviceID] {
+                volOK = Self.setInputVolume(deviceID: deviceID, volume: target)
+                savedVolumes.removeValue(forKey: deviceID)
+            }
             if muteOK || volOK { anySuccess = true }
         }
         log.info("unmute over \(devices.count) device(s) anySuccess=\(anySuccess)")
         return anySuccess
+    }
+
+    /// Look up the default input device's transport so the caller can
+    /// decide whether talk-while-muted detection can run.
+    func defaultInputTransport() -> DefaultInputTransport {
+        guard let deviceID = Self.defaultInputDeviceID() else {
+            return .absent
+        }
+        if Self.isBluetoothInput(deviceID: deviceID) {
+            return .bluetooth(deviceName: Self.deviceName(deviceID: deviceID))
+        }
+        return .wired
     }
 
     func startObservingDeviceChange() {
@@ -228,6 +293,50 @@ final class MicMuteController: MicMuteControlling {
         var v = value
         let status = AudioObjectSetPropertyData(deviceID, &addr, 0, nil, UInt32(MemoryLayout<Float>.size), &v)
         return status == noErr
+    }
+
+    private static func defaultInputDeviceID() -> AudioDeviceID? {
+        var addr = defaultInputDeviceAddress
+        var deviceID: AudioDeviceID = 0
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        let status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &addr, 0, nil, &size, &deviceID
+        )
+        guard status == noErr, deviceID != 0 else { return nil }
+        return deviceID
+    }
+
+    private static func isBluetoothInput(deviceID: AudioDeviceID) -> Bool {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyTransportType,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var transportType: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(deviceID, &addr, 0, nil, &size, &transportType) == noErr else {
+            return false
+        }
+        return transportType == kAudioDeviceTransportTypeBluetooth
+            || transportType == kAudioDeviceTransportTypeBluetoothLE
+    }
+
+    private static func deviceName(deviceID: AudioDeviceID) -> String? {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioObjectPropertyName,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var size = UInt32(MemoryLayout<CFString?>.size)
+        var name: CFString?
+        let status = withUnsafeMutablePointer(to: &name) { ptr -> OSStatus in
+            UnsafeMutableRawPointer(ptr).withMemoryRebound(to: UInt8.self, capacity: Int(size)) { _ in
+                AudioObjectGetPropertyData(deviceID, &addr, 0, nil, &size, ptr)
+            }
+        }
+        guard status == noErr, let cf = name else { return nil }
+        return cf as String
     }
 
     private static func channelCount(deviceID: AudioDeviceID) -> UInt32 {

@@ -1,22 +1,29 @@
+import Foundation
 import Testing
 @testable import Mewt
 
 @Suite("AppState integration")
 @MainActor
 struct AppStateTests {
-    private func makeState() -> (AppState, MockMuteController, MockAudioLevelMonitor, MockHotkeys) {
+    /// Each test gets its own UserDefaults suite so persisted properties
+    /// (like `overlayVisible`) don't leak between tests or pick up state
+    /// from the developer's `UserDefaults.standard`.
+    private func makeState(
+        defaults: UserDefaults? = nil
+    ) -> (AppState, MockMuteController, MockAudioLevelMonitor, MockHotkeys, UserDefaults) {
         let mute = MockMuteController()
         let level = MockAudioLevelMonitor()
         let hotkeys = MockHotkeys()
-        let app = AppState(muteController: mute, levelMonitor: level, hotkeys: hotkeys)
-        return (app, mute, level, hotkeys)
+        let suite = defaults ?? UserDefaults(suiteName: "AppStateTests.\(UUID().uuidString)")!
+        let app = AppState(muteController: mute, levelMonitor: level, hotkeys: hotkeys, defaults: suite)
+        return (app, mute, level, hotkeys, suite)
     }
 
     // MARK: - Toggle mute
 
     @Test("toggleMute calls mute() and updates isMuted/status")
     func toggleMutesController() {
-        let (app, mute, _, _) = makeState()
+        let (app, mute, _, _, _) = makeState()
         app.toggleMute()
         #expect(mute.muteCallCount == 1)
         #expect(app.isMuted == true)
@@ -25,7 +32,7 @@ struct AppStateTests {
 
     @Test("Second toggle calls unmute()")
     func secondToggleUnmutes() {
-        let (app, mute, _, _) = makeState()
+        let (app, mute, _, _, _) = makeState()
         app.toggleMute()
         app.toggleMute()
         #expect(mute.muteCallCount == 1)
@@ -38,7 +45,7 @@ struct AppStateTests {
 
     @Test("Mute failure reverts state and surfaces error message")
     func muteFailureReverts() {
-        let (app, mute, _, _) = makeState()
+        let (app, mute, _, _, _) = makeState()
         mute.muteShouldSucceed = false
         app.toggleMute()
         #expect(app.isMuted == false, "state machine reverted via .muteFailed")
@@ -47,7 +54,7 @@ struct AppStateTests {
 
     @Test("After mute failure, next toggle attempts mute again (not unmute)")
     func muteRetryAfterFailure() {
-        let (app, mute, _, _) = makeState()
+        let (app, mute, _, _, _) = makeState()
         mute.muteShouldSucceed = false
         app.toggleMute()
         #expect(mute.muteCallCount == 1)
@@ -62,7 +69,7 @@ struct AppStateTests {
 
     @Test("PTT during muted: unmutes on down, re-mutes on up")
     func pttRestoresMute() {
-        let (app, mute, _, _) = makeState()
+        let (app, mute, _, _, _) = makeState()
         app.toggleMute()
         #expect(mute.muteCallCount == 1)
         #expect(mute.unmuteCallCount == 0)
@@ -81,7 +88,7 @@ struct AppStateTests {
 
     @Test("PTT from unmuted preserves unmuted state (Phase 1 invariant)")
     func pttFromUnmutedInvariant() {
-        let (app, _, _, _) = makeState()
+        let (app, _, _, _, _) = makeState()
         app.pttDown()
         app.pttUp()
         #expect(app.isMuted == false)
@@ -89,7 +96,7 @@ struct AppStateTests {
 
     @Test("Three pttDowns then one pttUp restores mute (re-entrance handling)")
     func multiplePttDownSinglePttUp() {
-        let (app, _, _, _) = makeState()
+        let (app, _, _, _, _) = makeState()
         app.toggleMute()
         app.pttDown()
         app.pttDown()
@@ -106,7 +113,7 @@ struct AppStateTests {
 
     @Test("Device change while muted re-applies mute on new device")
     func deviceChangeReappliesMute() {
-        let (app, mute, _, _) = makeState()
+        let (app, mute, _, _, _) = makeState()
         app.toggleMute()
         #expect(mute.muteCallCount == 1)
 
@@ -117,7 +124,7 @@ struct AppStateTests {
 
     @Test("Device change while unmuted re-applies unmute")
     func deviceChangeReappliesUnmute() {
-        let (app, mute, _, _) = makeState()
+        let (app, mute, _, _, _) = makeState()
         mute.simulateDeviceChange()
         #expect(mute.unmuteCallCount == 1)
     }
@@ -126,7 +133,7 @@ struct AppStateTests {
 
     @Test("Level updates propagate to inputLevel + isSpeechDetected")
     func levelUpdatesPropagate() {
-        let (app, _, level, _) = makeState()
+        let (app, _, level, _, _) = makeState()
         level.simulateLevel(0.42, isTalking: true)
         #expect(app.inputLevel == 0.42)
         #expect(app.isSpeechDetected == true)
@@ -134,7 +141,7 @@ struct AppStateTests {
 
     @Test("isTalkingWhileMuted requires BOTH speech AND muted")
     func talkingWhileMutedRequiresMute() {
-        let (app, _, level, _) = makeState()
+        let (app, _, level, _, _) = makeState()
         level.simulateLevel(0.5, isTalking: true)
         #expect(app.isTalkingWhileMuted == false, "speech alone must not raise alert")
 
@@ -147,7 +154,7 @@ struct AppStateTests {
 
     @Test("Hotkey toggle event drives toggleMute()")
     func hotkeyToggleWired() {
-        let (app, mute, _, hotkeys) = makeState()
+        let (app, mute, _, hotkeys, _) = makeState()
         hotkeys.simulateToggle()
         #expect(mute.muteCallCount == 1)
         #expect(app.isMuted == true)
@@ -155,7 +162,7 @@ struct AppStateTests {
 
     @Test("Hotkey PTT events drive pttActive transitions")
     func hotkeyPTTWired() {
-        let (app, _, _, hotkeys) = makeState()
+        let (app, _, _, hotkeys, _) = makeState()
         app.toggleMute()
         hotkeys.simulatePTTDown()
         #expect(app.pttActive == true)
@@ -167,7 +174,7 @@ struct AppStateTests {
 
     @Test("start() is no-op under XCTest host")
     func startGuardedUnderTest() {
-        let (app, mute, level, hotkeys) = makeState()
+        let (app, mute, level, hotkeys, _) = makeState()
         app.start()
         #expect(mute.startObservingCallCount == 0)
         #expect(level.startCallCount == 0)
@@ -178,7 +185,7 @@ struct AppStateTests {
 
     @Test("Status walks through all four cases via real events")
     func statusTransitions() {
-        let (app, _, level, _) = makeState()
+        let (app, _, level, _, _) = makeState()
         #expect(app.status == .unmuted)
 
         app.toggleMute()
@@ -201,12 +208,73 @@ struct AppStateTests {
 
     @Test("Phase 1 bug repro: toggle during PTT then release lands in correct state")
     func phase1Regression() {
-        let (app, _, _, _) = makeState()
+        let (app, _, _, _, _) = makeState()
         app.toggleMute()       // muted
         app.pttDown()          // physical unmute
         app.toggleMute()       // target → unmute (during PTT)
         app.pttUp()            // physical reflects target = unmute
         #expect(app.isMuted == false)
         #expect(app.pttActive == false)
+    }
+
+    // MARK: - Overlay visibility persistence (Phase 3)
+
+    @Test("First-run default for overlayVisible is true")
+    func overlayDefaultsTrue() {
+        let (app, _, _, _, _) = makeState()
+        #expect(app.overlayVisible == true)
+    }
+
+    @Test("Setting overlayVisible writes to UserDefaults")
+    func overlayPersistsOnSet() {
+        let (app, _, _, _, defaults) = makeState()
+        app.overlayVisible = false
+        #expect(defaults.object(forKey: "overlay.visible") as? Bool == false)
+    }
+
+    @Test("Persisted overlayVisible=false is restored on init")
+    func overlayRestoredFromDefaults() {
+        let suite = UserDefaults(suiteName: "AppStateTests.\(UUID().uuidString)")!
+        suite.set(false, forKey: "overlay.visible")
+        let (app, _, _, _, _) = makeState(defaults: suite)
+        #expect(app.overlayVisible == false)
+    }
+
+    @Test("Persisted overlayVisible=true round-trips")
+    func overlayRoundTripTrue() {
+        let suite = UserDefaults(suiteName: "AppStateTests.\(UUID().uuidString)")!
+        let (first, _, _, _, _) = makeState(defaults: suite)
+        first.overlayVisible = false
+        first.overlayVisible = true
+        let (second, _, _, _, _) = makeState(defaults: suite)
+        #expect(second.overlayVisible == true)
+    }
+
+    // MARK: - Talk detection status (Phase 3)
+
+    @Test("Device change to Bluetooth flips talkDetection to disabled")
+    func talkDetectionFlipsOnBluetooth() {
+        let (app, mute, _, _, _) = makeState()
+        mute.transport = .bluetooth(deviceName: "AirPods Pro")
+        mute.simulateDeviceChange()
+        #expect(app.talkDetection == .disabledByBluetooth(deviceName: "AirPods Pro"))
+    }
+
+    @Test("Device change to wired flips talkDetection to active")
+    func talkDetectionFlipsOnWired() {
+        let (app, mute, _, _, _) = makeState()
+        mute.transport = .bluetooth(deviceName: "AirPods")
+        mute.simulateDeviceChange()
+        mute.transport = .wired
+        mute.simulateDeviceChange()
+        #expect(app.talkDetection == .active)
+    }
+
+    @Test("Device change to absent flips talkDetection to unavailable")
+    func talkDetectionFlipsOnAbsent() {
+        let (app, mute, _, _, _) = makeState()
+        mute.transport = .absent
+        mute.simulateDeviceChange()
+        #expect(app.talkDetection == .unavailable)
     }
 }

@@ -9,6 +9,7 @@ final class MockMuteController: MicMuteControlling {
     private(set) var unmuteCallCount = 0
     private(set) var startObservingCallCount = 0
     var muteShouldSucceed = true
+    var transport: DefaultInputTransport = .wired
 
     @discardableResult
     func mute() -> Bool {
@@ -24,6 +25,10 @@ final class MockMuteController: MicMuteControlling {
 
     func startObservingDeviceChange() {
         startObservingCallCount += 1
+    }
+
+    func defaultInputTransport() -> DefaultInputTransport {
+        transport
     }
 
     func simulateDeviceChange() {

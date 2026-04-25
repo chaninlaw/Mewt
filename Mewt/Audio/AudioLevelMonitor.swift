@@ -9,17 +9,30 @@ protocol AudioLevelMonitoring: AnyObject {
     func stop()
 }
 
-/// Taps the system input node to measure RMS amplitude. Works even when
-/// `MicMuteController` has zeroed the input volume, because AVAudioEngine
-/// receives the raw input stream before system-level volume is applied to
-/// the signal that other apps consume.
+enum AudioLevelMonitorError: Error {
+    /// No default input device is currently connected. Talk-while-muted
+    /// detection requires a mic; the rest of Mewt (mute, hotkeys,
+    /// overlay) still works without the level tap.
+    case noInputDevice
+}
+
+/// Taps the system input node to measure RMS amplitude. Drives the
+/// talk-while-muted alarm when the underlying device permits it (see
+/// `TalkDetectionStatus` for the per-transport-type semantics).
 ///
-/// The "is talking" decision is delegated to `TalkingDebouncer` so the
-/// time-based hysteresis can be unit-tested without an audio engine.
+/// **Lifecycle:** a single `AVAudioEngine` instance lives for the whole
+/// process. We *don't* recreate it across `stop()` / `start()` because
+/// the audio I/O thread on the previous engine can still be processing
+/// a buffer when the new engine starts, which produced an
+/// `EXC_BAD_ACCESS` on Thread 13 the moment the user switched default
+/// inputs in System Settings. Format changes are handled by
+/// subscribing to `AVAudioEngine.configurationChangeNotification` and
+/// reinstalling the tap there — Apple's recommended pattern.
 final class AudioLevelMonitor: AudioLevelMonitoring {
     private let log = Logger(subsystem: "com.chaninlaw.Mewt", category: "LevelMonitor")
     private let engine = AVAudioEngine()
     private var running = false
+    private var configChangeObserver: NSObjectProtocol?
 
     /// Callback fires on the main queue. First arg is instantaneous level (0...1),
     /// second arg is a debounced "isTalking" boolean.
@@ -27,14 +40,55 @@ final class AudioLevelMonitor: AudioLevelMonitoring {
 
     private var debouncer = TalkingDebouncer()
 
+    init() {
+        // Subscribe once at init: AVAudioEngine fires this when its
+        // hardware config changes (sample rate, channel count, default
+        // device). We have to remove + reinstall the tap to keep up.
+        configChangeObserver = NotificationCenter.default.addObserver(
+            forName: NSNotification.Name.AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: .main
+        ) { [weak self] _ in
+            // Hop onto the main actor explicitly — the observer's
+            // closure is non-isolated and we need to touch isolated
+            // state (running, engine, debouncer).
+            Task { @MainActor [weak self] in
+                self?.handleConfigurationChange()
+            }
+        }
+    }
+
+    deinit {
+        if let configChangeObserver {
+            NotificationCenter.default.removeObserver(configChangeObserver)
+        }
+    }
+
     func start() throws {
         guard !running else { return }
 
         let input = engine.inputNode
-        let format = input.outputFormat(forBus: 0)
+        // `inputFormat(forBus:0)` reflects the actual hardware format. If
+        // no default input device is connected (no mic, no AirPods), the
+        // HAL returns a zero-channel / zero-rate stub. Calling
+        // `installTap` in that state raises an Objective-C exception
+        // ("Failed to create tap due to format mismatch") that Swift
+        // `try` cannot catch — surface a recoverable Swift error
+        // instead so `AppState.start` reports "No microphone detected"
+        // gracefully and the rest of the app (overlay, hotkeys) still
+        // launches.
+        let hwFormat = input.inputFormat(forBus: 0)
+        guard hwFormat.channelCount > 0, hwFormat.sampleRate > 0 else {
+            log.warning("No input device available; skipping tap install")
+            throw AudioLevelMonitorError.noInputDevice
+        }
 
         input.removeTap(onBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+        // Pass `nil` so AVFoundation uses the bus's current format
+        // instead of whatever we'd have cached. Belt-and-suspenders
+        // against format mismatch when the input device changed since
+        // the last `start()`.
+        input.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
             self?.process(buffer: buffer)
         }
 
@@ -51,7 +105,25 @@ final class AudioLevelMonitor: AudioLevelMonitoring {
         running = false
     }
 
-    private func process(buffer: AVAudioPCMBuffer) {
+    /// Restart the tap so it picks up the new format / device. We call
+    /// this from `AVAudioEngineConfigurationChange` instead of from
+    /// `AppState.onDefaultDeviceChanged` so the engine itself decides
+    /// when a reconfigure is required — avoids torching the engine on
+    /// device changes that don't actually affect format.
+    private func handleConfigurationChange() {
+        guard running else { return }
+        log.info("Engine configuration changed; reinstalling tap")
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
+        running = false
+        do {
+            try start()
+        } catch {
+            log.error("Failed to restart engine after config change: \(String(describing: error))")
+        }
+    }
+
+    nonisolated private func process(buffer: AVAudioPCMBuffer) {
         guard let channelData = buffer.floatChannelData else { return }
         let channelCount = Int(buffer.format.channelCount)
         let frameLength = Int(buffer.frameLength)
@@ -67,12 +139,18 @@ final class AudioLevelMonitor: AudioLevelMonitoring {
         }
         let total = Float(frameLength * channelCount)
         let rms = (total > 0) ? sqrt(sumSquares / total) : 0
-
-        let isTalking = debouncer.observe(rms: rms, now: Date())
         let level = min(1.0, rms * 4)
+        let now = Date()
 
+        // The tap fires on AVAudioEngine's I/O thread. `debouncer` and
+        // `onLevelUpdate` are actor-isolated state, so hop to main
+        // before touching them — accessing isolated state from the I/O
+        // thread is undefined behaviour and was a likely source of the
+        // EXC_BAD_ACCESS we saw on device switches.
         DispatchQueue.main.async { [weak self] in
-            self?.onLevelUpdate?(level, isTalking)
+            guard let self else { return }
+            let isTalking = self.debouncer.observe(rms: rms, now: now)
+            self.onLevelUpdate?(level, isTalking)
         }
     }
 }

@@ -37,6 +37,8 @@ struct ContentView: View {
                     .tint(appState.isTalkingWhileMuted ? .red : .accentColor)
             }
 
+            TalkDetectionRow(status: appState.talkDetection)
+
             Divider()
 
             HStack {
@@ -61,6 +63,25 @@ private struct HotkeyHintsView: View {
         }
         .font(.caption2)
         .foregroundStyle(.secondary)
+    }
+}
+
+private struct TalkDetectionRow: View {
+    let status: TalkDetectionStatus
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: status.isActive ? "ear.fill" : "ear.slash")
+                .foregroundStyle(status.isActive ? Color.green : Color.secondary)
+                .font(.caption)
+            Text(status.label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 0)
+        }
+        .help(status.helpText)
     }
 }
 

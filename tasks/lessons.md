@@ -159,6 +159,75 @@
 
 ---
 
+### Hybrid mute strategy: Bluetooth ต้อง HAL mute + volume=0; wired ใช้ HAL mute เท่านั้น (volume คงเดิม)
+
+- **Trigger:** macOS app ที่ทั้ง mute ไมค์ system-wide **และ** monitor input level (เช่น talk-while-muted detection)
+- **Empirical finding (2026-04-26 user verify):** บน external USB device, การตั้ง `volume=0` silence **ทั้ง** client ของแอพอื่น **และ** AVAudioEngine tap ของเราเอง — ขัดกับ Phase 0 comment ที่อ้างว่า engine reads "raw input stream before system-level volume". เห็นได้ว่าบาง USB driver apply volume scaling ที่ stage ก่อน HAL multiplexing ดังนั้น tap ก็โดน scale ไปด้วย
+- **Bluetooth quirk:** AirPods / HFP driver ignore volume scaling → `volume=0` ไม่ silence client → ต้อง HAL mute เท่านั้น (silences both clients + tap)
+- **Final rule (Phase 3 revised):**
+  - **Bluetooth** (`kAudioDeviceTransportTypeBluetooth*`): `mute=1` + `volume=0` (รับว่า detection ไม่ทำงานบน AirPods)
+  - **Wired** (built-in / USB / Thunderbolt): `mute=1` only — **ห้ามแตะ volume** เลย เพราะ:
+    1. volume=0 silence tap → ไม่ detect
+    2. volume คงเดิม → tap อ่านได้ → detection works
+    3. HAL mute ปกติ silence client (ถ้า driver respect mute property) — quirky USB ที่ไม่ respect mute=1 จะ leak (acceptable trade — Phase 1 เคยใช้ belt-and-suspenders ก็ silence tap ทำให้ feature เสียทั้งระบบ)
+- **AVAudioEngine binding gotcha + safe pattern:** `inputNode` bind format ที่ default device ตอน engine.start(). สลับ default device → cached format มิสแมตช์ → installTap raise NSException "format mismatch" ที่ Swift try ดักไม่ได้
+  - **ห้าม recreate engine** (`engine = AVAudioEngine()` ใน `stop()`) — old engine's I/O thread ยัง process buffer อยู่ → race กับ new engine → **EXC_BAD_ACCESS thread 13** ตอนสลับ device. นี่คือ approach ครั้งแรกของผมและพังจริง
+  - **Pattern ที่ถูก** (Apple recommended): subscribe `NotificationCenter.default.addObserver(forName: NSNotification.Name.AVAudioEngineConfigurationChange, object: engine, queue: .main) { ... }` → restart tap ภายใน handler. Engine ตัดสินใจเองว่าจะ reconfigure เมื่อไร → no race
+  - `installTap(format: nil)` ใช้ bus's current format = guard against stale format spec
+- **Tap callback บน I/O thread → ห้าม touch isolated state ตรงๆ:** `installTap(...) { buffer, _ in self.process(buffer) }` block fires บน AVAudioEngine I/O thread. ถ้า class เป็น `@MainActor` → mutate property (เช่น `debouncer`) ใน I/O callback = data race + UB ที่ Swift compiler ไม่ catch
+  - Fix: `nonisolated func process(buffer:)` + คำนวณ pure value (rms, level) → `DispatchQueue.main.async { self.debouncer.observe(...) }` ขย้ายงานที่ touch state ไป main
+  - Phase 0 ตั้งแต่แรกมี race นี้แต่โชคดีไม่ crash. การ recreate engine มา Phase 3 เพิ่ม chance race manifest เป็น crash จริง
+- **Trade-off ที่ surface ให้ user:** เมื่อ default input = Bluetooth → detection off; quirky USB อาจ leak. UI ต้องบอก user ชัดเจนว่า detection state คือ active / disabled และเหตุผล + อธิบาย mute strategy ใน Settings
+- **Why (incident 2026-04-26):** Phase 3 v1 ใช้ volume=0 บน wired → user observe detection ไม่ทำงานบน external USB. Revise → wired = mute=1 only (no volume change) → detection works. Trade-off: quirky USB ที่ไม่ respect HAL mute leak ได้ แต่ feature wide-applicable กว่า
+- **How to apply:** ทุก feature ที่ depend บน input level monitoring + ต้อง mute ระบบ → ทดลอง mute mechanism per device type จริงก่อน document strategy. ห้าม trust comment / Phase 0 finding ที่อ้าง pre-volume read ของ engine — verify จริงเสมอ
+
+---
+
+### `@NSApplicationDelegateAdaptor` ไม่ Observable — SwiftUI scene body cache nil ค่า delegate ตอน first eval
+
+- **Trigger:** SwiftUI App ที่ใช้ `@NSApplicationDelegateAdaptor` แล้ว scene body `if let x = appDelegate.someProp { ... }` หรือ pass `someProp` เข้า environment — `someProp` set ใน `applicationDidFinishLaunching`
+- **Symptom:** Scene first eval = `appDelegate.someProp` ยังเป็น nil → fall to else branch / unwrap fail. Body ไม่ re-eval หลัง `applicationDidFinishLaunching` set ค่า เพราะ SwiftUI ไม่รู้ว่า `appDelegate` (NSObject ธรรมดา) เปลี่ยน. View ที่ require environment crash: `Fatal error: No Observable object of type X found`
+- **Rule:** ทุกอย่างที่ scene body ต้องการ ให้ live ที่ App-level `@State` (ที่ Observable-aware) ไม่ใช่ delegate property. AppDelegate รับ instance ผ่าน hand-off:
+  ```swift
+  @main
+  struct MyApp: App {
+      @State private var appState = AppState()
+      @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
+      var body: some Scene {
+          Settings { SettingsView().environment(appState) }
+      }
+
+      init() {
+          // @State initial value evaluated before init body
+          AppDelegate.pendingAppState = _appState.wrappedValue
+      }
+  }
+
+  final class AppDelegate: NSObject, NSApplicationDelegate {
+      nonisolated(unsafe) static var pendingAppState: AppState?
+      func applicationDidFinishLaunching(_ n: Notification) {
+          guard let state = Self.pendingAppState else { return }
+          // wire hardware against `state`
+      }
+  }
+  ```
+- **Why (incident 2026-04-26):** Phase 3 SettingsView ใช้ `@Environment(AppState.self)` (mandatory, ก่อนหน้านี้ Phase 1/2 ไม่ใช้). MewtApp มี else branch render `SettingsView()` ไม่ pass env เพราะตอนนั้น appDelegate.appState ยัง nil ใน scene first eval → crash ตอนผู้ใช้ open Settings. Phase 1/2 ไม่ catch เพราะ SettingsView ไม่ require env ตอนนั้น
+- **How to apply:** ห้าม use `appDelegate.x` ใน SwiftUI body branch ที่ x อาจเป็น nil. ถ้าจำเป็นต้อง share state ระหว่าง MewtApp และ AppDelegate → static hand-off pattern หรือ AppState singleton
+
+---
+
+### `AVAudioEngine.installTap` ขว้าง NSException ไม่ใช่ Swift throw — Swift `try/catch` ดักไม่ได้
+
+- **Trigger:** เรียก `engine.inputNode.installTap(onBus: 0, ...)` ในสถานะที่ HAL ไม่มี default input device (ไม่มี mic ต่อ, AirPods หลุด, audio service crashed)
+- **Symptom:** crash log `Failed to create tap due to format mismatch, <AVAudioFormat: 2 ch, 44100 Hz...>` + `An uncaught exception was raised` — ไม่ใช่ Swift error, AppKit หรือ AVFAudio code path ที่ขว้าง `NSException` ผ่าน `+[NSException raise:format:]` → Swift `do try { ... } catch { }` ผ่านมือ → process terminate
+- **Rule:** ก่อน `installTap` ต้อง pre-flight check **hardware format** ผ่าน `inputNode.inputFormat(forBus: 0)` (ไม่ใช่ `outputFormat`) — เมื่อ no device, `inputFormat.channelCount == 0` และ `sampleRate == 0`. ถ้า invalid → throw Swift error (`AudioLevelMonitorError.noInputDevice`) ที่ caller catch ได้
+- **ห้าม:** assume ว่า `try installTap` เพียงพอ — Apple ไม่ document ว่า method นี้ throw NSException แต่ practice ทำ
+- **Why (incident 2026-04-26):** Phase 3 launch ครั้งแรกบน dev machine ที่ไม่มี mic ต่อ → crash ที่ `AppState.start()` ทำ overlay/hotkey ไม่ install เลย. Phase 0/1/2 verify ผ่านเพราะตอน test มี mic ต่ออยู่ — bug latent ตั้งแต่ Phase 0 เพิ่งโผล่
+- **How to apply:** เจอ AVFAudio API ใด ๆ ที่ "format mismatch" หรือ "node not connected" เป็นไปได้ → wrap ด้วย pre-flight check + Swift error path. ทดลอง launch ทุก feature ในสถานะ "no input device" (ถอด mic / disable Default Input ใน Audio MIDI Setup) เป็น smoke test มาตรฐานก่อนปิด Phase
+
+---
+
 ### MainActor-isolated init ใช้เป็น default parameter value ไม่ได้
 
 - **Trigger:** เขียน `init(dep: any Foo = RealFoo())` ที่ `RealFoo()` is `@MainActor` (implicit จาก project default หรือ explicit) → compile fail "call to main actor-isolated initializer 'init()' in a synchronous nonisolated context"

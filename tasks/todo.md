@@ -1,123 +1,58 @@
-# Mewt — Phase 1 Global Hotkey
+# Mewt — Task Log
 
-**Goal:** Global hotkey + push-to-talk + user-configurable shortcut UI เพื่อให้ผู้ใช้ mute ได้ขณะแอปอื่น focused
+## Phase progression
 
-**Plan ฉบับเต็ม:** `docs/plans/phase-1-global-hotkey.md`
+1. ✅ **Phase 0** — Core mute engine + talk-while-muted (`82ba684`)
+2. ✅ **Phase 1** — Global hotkey ⌥M / PTT ⌥Space + Settings, hybrid mute across AirPods/built-in/USB (`253622d`)
+3. ✅ **Pre-Phase 2** — `MicStatus` enum + `MuteStateMachine` + `TalkingDebouncer` extract, DI refactor, 43 tests (`c670b91`)
+4. ✅ **Phase 2** — Static mascot face + right-click tray quick toggle, 60 tests (`c925135`)
+5. ✅ **Phase 3** — Floating overlay window — *this commit*
+6. ⏭ **Phase 4** — Animated pets + StoreKit 2 IAP
 
----
-
-## Implementation checklist
-
-- [x] เพิ่ม `KeyboardShortcuts` SPM package (2.0.0+) ใน `project.pbxproj`
-- [x] สร้าง `Mewt/Input/HotkeyController.swift` (onKeyDown/onKeyUp + default shortcuts ⌥M, ⌥Space)
-- [x] แก้ `Mewt/State/AppState.swift` เพิ่ม `pttActive`, `preTTState`, `pttDown()`, `pttUp()` + wire hotkey callbacks
-- [x] แก้ `Mewt/ContentView.swift` แสดง hotkey hints + Settings button
-- [x] สร้าง `Mewt/Settings/SettingsView.swift` + เชื่อม `Settings { }` scene ใน `MewtApp.swift`
-- [x] `xcodebuild` build ผ่าน — fix: ต้อง `import AppKit` ใน HotkeyController เพราะ `SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY` บังคับ explicit import สำหรับ `.option` modifier
-- [x] Codesign entitlements check — ไม่เพิ่มจาก Phase 0 ตามคาด (Carbon ใน sandbox)
-- [x] **AirPods fix** — rewrite `MicMuteController` ใช้ `kAudioDevicePropertyMute` เท่านั้น (Option A, ดู `tasks/lessons.md`) — build ผ่าน
-- [x] **Orthogonal PTT state** — refactor `AppState` แยก `targetMuted` จาก `pttActive`, unified `applyMuteState()` รัน single source of truth ทุก transition + device change (แก้เคส "switch device ขณะ PTT ค้าง")
-- [x] **External Mic fix** — belt-and-suspenders: apply ทั้ง `kAudioDevicePropertyMute` (Main + ทุก channel) **และ** `kAudioDevicePropertyVolumeScalar=0` พร้อมกัน; per-device saved volume dict (ดู `tasks/lessons.md` entry ที่ revise แล้ว)
-- [x] **Mute ทุก input device** (ไม่ใช่แค่ default) — fix Chrome/WebRTC pin-device problem: enumerate `kAudioHardwarePropertyDevices`, loop mute/unmute ทั้งหมด + listener บน devices-list change
-- [ ] Manual verification (ต้อง user test — ดูด้านล่าง)
+Plans: `docs/plans/phase-1-global-hotkey.md`, `docs/plans/phase-3-floating-overlay.md`
+Lessons: `tasks/lessons.md`
 
 ---
 
-## Verification (ต้อง user ทดสอบจริง)
+## Phase 3 — Floating Overlay (delivered)
 
-### Toggle hotkey
-- [x] เปิด Chrome → กด ⌥M → menu bar icon + state ใน Mewt เปลี่ยน
-- [x] **AirPods** + Meet muted → ฝั่งตรงข้ามได้ยินเงียบ (หลัง AirPods fix — Phase 0 pre-fix ล้มเหลวบน AirPods)
-- [x] Built-in mic + Meet muted → ยัง work เหมือนเดิม (ไม่ regress จาก Phase 0)
-- [x] Zoom test call muted → ฝั่งตรงข้ามได้ยินเงียบ
-
-### Push-to-talk
-- [x] เริ่มที่ muted → กด ⌥Space ค้าง → ฝั่งตรงข้ามได้ยิน → ปล่อย → กลับเงียบ
-- [x] เริ่มที่ unmuted → กด ⌥Space ค้าง → ปล่อย → ยัง unmuted (invariant ต้องรักษา)
-
-### Edge cases
-- [x] กด toggle ขณะที่ PTT ค้างอยู่ → ไม่ crash (state machine ป้องกันด้วย `preTTState` guard)
-- [x] Switch device ขณะ PTT ค้าง → state consistent (หลัง orthogonal refactor — built-in/AirPods สลับตอน PTT ค้างแล้วปล่อย → device ใหม่ต้อง muted)
-- [x] Switch AirPods ↔ built-in mic ขณะ muted → device ใหม่ยัง muted
-
-### Settings UI
-- [x] เปิด Settings scene (⌘, หรือปุ่ม Settings…)
-- [x] เปลี่ยน shortcut → shortcut ใหม่ทำงาน
-- [ ] restart app → shortcut ใหม่ persist
-
----
-
-## Review
-
-**Status:** ✅ Phase 1 verified by user — hotkey + PTT + settings work, audio muting reliable across AirPods/built-in/External USB
-
-### Scope ที่โตกว่า plan เดิม
-
-Plan เดิมใน `docs/plans/phase-1-global-hotkey.md` เป็นแค่ "add hotkey" ประเมินไว้ ~2 ชม. ระหว่าง verify เจอ Phase 0 bugs ที่ซ่อนอยู่ 3 ตัว (test coverage Phase 0 ไม่ครอบคลุม) ต้องแก้ด้วย ลงเอยที่ **4 iteration** ของ mute logic:
-
-| Iteration | Scope | Trigger |
-|---|---|---|
-| 1. Initial | Add hotkey + PTT + Settings (ตาม plan) | - |
-| 2. AirPods fix | switch `kAudioDevicePropertyVolumeScalar=0` → `kAudioDevicePropertyMute` | User test AirPods + Meet → เสียงเล็ด |
-| 3. Orthogonal PTT | `targetMuted ⊥ pttActive`, unified `applyMuteState()` | Switch device ขณะ PTT ค้าง → desync |
-| 4. Belt-and-suspenders | apply mute property **และ** volume=0 ทุก element | External USB mic ไม่ respect mute property อย่างเดียว |
-| 5. Mute all devices | enumerate `kAudioHardwarePropertyDevices` loop ทุก device | Chrome/WebRTC pin device → มุต default ตัวเดียวไม่พอ |
-
-### Code churn
-- สร้าง: `Mewt/Input/HotkeyController.swift`, `Mewt/Settings/SettingsView.swift`
-- แก้มาก: `Mewt/Audio/MicMuteController.swift` (~180 → ~240 บรรทัด, rewrite 3 ครั้ง), `Mewt/State/AppState.swift` (refactor orthogonal state), `Mewt/ContentView.swift` (hints + Settings), `Mewt/MewtApp.swift` (Settings scene)
-- Config: `Mewt.xcodeproj/project.pbxproj` (SPM package)
-- ไม่แตะ: `Mewt.entitlements`, `Mewt/Audio/AudioLevelMonitor.swift`
-
-### Key architectural decisions (บันทึกเต็มใน `tasks/lessons.md`)
-1. **Mute = HAL property + volume=0 + ทุก element + ทุก device** — ไม่มี single mechanism ที่ครอบคลุมทุก input device บน macOS (AirPods HFP, built-in, USB interface) และไม่มีทาง detect runtime ว่า device ใด respect ตัวไหน → ยิงทุกช่องทางให้หมด
-2. **Orthogonal state** สำหรับ transient override (PTT): physical = `targetMuted && !pttActive` เป็น derived — จุด sync จุดเดียว (`applyMuteState()`) เรียกจาก 4 trigger (toggle, pttDown, pttUp, device topology change)
-3. **KeyboardShortcuts SPM** — ใช้ Carbon `RegisterEventHotKey` ใต้ฮูด → sandbox-compatible ไม่ต้อง Input Monitoring / Accessibility entitlement
-
-### ข้อสังเกตระหว่าง impl
-- **AppKit import จำเป็น** — `SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES` ตัด transitive member visibility → `.option` modifier ต้อง `import AppKit` ตรงๆ
-- **SourceKit diagnostics** ฟ้อง "No such module 'KeyboardShortcuts'" / "Cannot find X in scope" หลายครั้ง → transient index lag บน PBXFileSystemSynchronizedRootGroup + ใหม่ SPM; `xcodebuild` compile ผ่านทุกครั้ง
-
-### Known limits ที่ต้องบอก user
-1. **`⌥Space` ถูก forward ไปแอพ focused** — ถ้าเจอ space เกินใน text field ให้เปลี่ยน shortcut ใน Settings (CGEventTap consume = Phase ถัดไป, ต้อง Accessibility permission)
-2. **Mute มีผลกับ input device ทุกตัวที่เชื่อมต่อ** — intentional สำหรับ "system-wide mute"; ถ้าใช้ Continuity iPhone Microphone / Mac audio routing แปลกๆ จะถูก mute ไปด้วย
-3. Settings เปิดด้วย `⌘,` หรือปุ่ม Settings… ในเมนู
-
-### Next phases
-1. ✅ Phase 0 — Core mute engine + talk-while-muted
-2. ✅ Phase 1 — Global hotkey + PTT + settings
-3. ✅ Pre-Phase 2 — `MicStatus` enum + derived view state, `MuteStateMachine` + `TalkingDebouncer` extract, DI refactor, **43 unit tests** (~99% business logic coverage; HAL wrappers excluded by design)
-4. ✅ Phase 2 — Static mascot face (free tier) + right-click tray quick mute, **60 unit tests** (+17: MascotPose × 8, TrayClickRouter × 9)
-5. Phase 3 — Floating overlay window  ← ขั้นถัดไป
-6. Phase 4 — Animated pets + StoreKit 2 IAP
-
----
-
-## Phase 2 Review
-
-**Status:** ✅ Build + tests pass (60/60). Manual verification pending user.
+**Goal:** Mascot ลอยทุก Space + ทับ fullscreen, draggable, click = toggle mute, persist position. UI surface ของ talk-while-muted detection พร้อมเหตุผล
 
 ### Scope delivered
-- `Mewt/Mascot/MascotPose.swift` — pure `MicStatus → (eyes, mouth, accent, a11y)` mapping
-- `Mewt/Mascot/MascotFace.swift` — SwiftUI shape-based face rendered into popover header
-- `Mewt/Tray/TrayClickRouter.swift` — pure click→action routing (`.left` opens popover, `.right`/`.leftWithControl` toggle mute)
-- `Mewt/Tray/TrayController.swift` — NSStatusItem + NSPopover wrapper, button image driven by `withObservationTracking` re-subscribe loop
-- `Mewt/MewtApp.swift` — switched from `MenuBarExtra` to `NSApplicationDelegateAdaptor(AppDelegate)`; AppDelegate guards hardware setup under XCTest
-- `Mewt/ContentView.swift` — popover header now uses `MascotFace`
-- `MewtTests/MascotPoseTests.swift` (8 tests), `MewtTests/TrayClickRouterTests.swift` (9 tests)
 
-### Why migrate off MenuBarExtra
-SwiftUI's `MenuBarExtra` does not surface right-click events distinct from left-click — both open the menu. Phase 2's "quick toggle on right-click" required dropping back to AppKit (`NSStatusItem` + `NSPopover` + `button.sendAction(on: [.leftMouseUp, .rightMouseUp])`). Cost: ~80 LOC of AppKit boilerplate; benefit: full event-mask control + ctrl-click support as a free extra.
+**ไฟล์ใหม่:**
+- `Mewt/Overlay/OverlayPosition.swift` — pure value type (clamp + defaultOrigin) + 9 tests
+- `Mewt/Overlay/OverlayWindow.swift` — `NSPanel` subclass (`.borderless + .nonactivatingPanel + .fullSizeContentView`, level `.statusBar`, collection `[.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]`)
+- `Mewt/Overlay/OverlayMouseTrackerView.swift` — `NSHostingView` subclass override `mouseDown` + `NSWindow.trackEvents` (smooth native drag, click discrimination, `acceptsFirstMouse=true`)
+- `Mewt/Overlay/OverlayContentView.swift` — SwiftUI 64pt `MascotFace` + 16pt padding (ear ครบ ไม่โดน clip)
+- `Mewt/Overlay/OverlayWindowController.swift` — install + observe visibility + drag handling + position persistence
+- `Mewt/State/TalkDetectionStatus.swift` — enum 4 cases (`active` / `disabledByBluetooth(name)` / `unavailable` / `permissionDenied`) + `label` + `helpText` + 6 tests
 
-### Verification (manual — pending user test)
-- [ ] Right-click menu bar icon while popover is hidden → mute toggles (icon flips to slashed mic)
-- [ ] Left-click → popover opens with mascot face header
-- [ ] Ctrl+click → behaves like right-click (toggles mute)
-- [ ] Mascot face changes through all 4 expressions: idle (😺), sleeping (😴 + Z), alarmed (🙀 + !), PTT (🗣️ + waveform)
-- [ ] Talking-while-muted tints menu bar icon red
-- [ ] Tooltip on icon reads "<state> — left-click to open, right-click to toggle mute"
+**ไฟล์แก้:**
+- `Mewt/MewtApp.swift` — ย้าย `AppState` ไปเป็น `@State` ของ `MewtApp` + AppDelegate รับผ่าน `static var pendingAppState`; install `OverlayWindowController` ใต้ XCTest guard
+- `Mewt/State/AppState.swift` — เพิ่ม `overlayVisible` (UserDefaults), `talkDetection` (TalkDetectionStatus); refresh ตอน start + device change
+- `Mewt/Settings/SettingsView.swift` — Overlay toggle + Talk-while-muted Detection section พร้อมเหตุผล
+- `Mewt/ContentView.swift` — TalkDetectionRow ใน popover
+- `Mewt/Audio/AudioLevelMonitor.swift` — pre-flight format guard + `AVAudioEngineConfigurationChange` notification handler + dispatch debouncer/callback ไป main
+- `Mewt/Audio/MicMuteController.swift` — Hybrid mute strategy (Bluetooth `mute=1+vol=0`, wired `mute=1` only) + `defaultInputTransport()` helper
 
-### Out of scope (deferred)
-- Animated mascot motion / level-driven scaling (Phase 4 paid tier)
-- Custom mascot artwork (Phase 4)
-- Floating overlay (Phase 3)
+**Tests:** 60 → **82** (+22: 9 OverlayPosition + 4 overlayVisible + 6 TalkDetectionStatus + 3 device-change-talkDetection)
+
+### Iterations ระหว่าง verify
+
+| # | Issue | Trigger | Fix |
+|---|---|---|---|
+| 1 | Crash ตอน open Settings โดยไม่มี mic | `@Environment(AppState.self)` mandatory แต่ `@NSApplicationDelegateAdaptor` ไม่ Observable → scene cache nil | ย้าย AppState → `@State` ของ MewtApp + static hand-off |
+| 2 | Crash ตอน launch (ไม่มี input device) | `installTap` ขว้าง NSException ที่ Swift try ดักไม่ได้ | Pre-flight check `inputFormat.channelCount > 0` → throw Swift error |
+| 3 | Mascot ครึ่งหน้าหายขอบจอ + drag กระตุก | `MascotFace` ear render นอก frame; SwiftUI DragGesture roundtrip overhead | Panel 96pt + padding 16, default inset 32; `OverlayMouseTrackerView` ใช้ `NSWindow.trackEvents` (native event loop) |
+| 4 | Talk-while-muted ใช้ไม่ได้ | `volume=0` บน external silence tap ด้วย; `mute=1` ก็ silence | Hybrid: Bluetooth = `mute+vol=0`, wired = `mute=1` only (no volume change → tap reads) |
+| 5 | EXC_BAD_ACCESS ตอน device change | Engine recreate race + tap callback mutate isolated state | Single engine instance; subscribe `AVAudioEngineConfigurationChange`; nonisolated `process(buffer:)` + dispatch ไป main |
+
+### Status: ✅ Verified by user
+
+Verified: launch + mascot position + drag smooth + click toggle + Settings toggle + persistence + device switching no crash + talkDetection state surface ถูกต้อง
+
+### Known limitations
+
+- **Talk-while-muted alarm บน External Microphone (non-AirPods, non-built-in) ยังไม่ทำงาน** — บาง USB driver apply volume scaling ที่ pre-tap stage และ HAL mute ก็ silence tap ด้วย ทำให้ AVAudioEngine อ่าน silence. UI surface เป็น `talkDetection.active` แต่ alarm ไม่ trigger จริง. **TODO:** investigate alternative detection approach (เช่น Aggregate Device routing, AVCaptureSession path) — เก็บไว้หลัง Phase 4
+- **`⌥Space` PTT ยังถูก forward ไปแอพ focused** — Phase 1 carry-over, ต้อง CGEventTap consume + Accessibility permission
