@@ -113,6 +113,52 @@
 
 ---
 
+### `MenuBarExtra` ไม่แยก left-click กับ right-click — ต้อง switch ไป NSStatusItem ถ้าต้องการ right-click distinct action
+
+- **Trigger:** ต้องให้ menu-bar icon ทำงานต่างกันตาม mouse button (เช่น Phase 2: left = open popover, right = quick toggle mute)
+- **Rule:** SwiftUI `MenuBarExtra` ทุก style (`.menu`, `.window`) ส่ง click event ไปทาง action เดียวกันโดยไม่บอกว่าเป็น left/right → ต้อง drop ลงไปใช้ `NSApplicationDelegateAdaptor` + `NSStatusBar.system.statusItem(...)` + `button.sendAction(on: [.leftMouseUp, .rightMouseUp])` แล้วอ่าน `NSApp.currentEvent.type` ใน selector
+- **Pattern ที่ใช้:** AppDelegate hold `NSStatusItem` + `NSPopover` (popover แทน MenuBarExtra window). Click handler:
+  ```swift
+  @objc func handleClick(_ sender: Any?) {
+      guard let event = NSApp.currentEvent else { return }
+      switch event.type {
+      case .rightMouseUp: appState.toggleMute()
+      case .leftMouseUp:
+          if event.modifierFlags.contains(.control) { appState.toggleMute() }
+          else { togglePopover() }
+      default: break
+      }
+  }
+  ```
+- **AppDelegate ต้อง mirror XCTest guard ของ AppState** — `applicationDidFinishLaunching` ถูกเรียกตอน hosted test bundle launch app เข้า process; ถ้าไม่ guard จะมี status item โผล่ใน user's menu bar ทุกครั้ง run test + AppState.start() จะ fire (ที่จริงตัวเองมี guard อยู่แล้ว แต่ TrayController.install() ไม่มี → ต้อง guard ที่ AppDelegate level)
+- **Why (incident 2026-04-25):** Phase 2 migrate menu-bar layer; `MenuBarExtra` ไม่มี API surface ใดๆ สำหรับ right-click — search Apple docs / forum confirm "by design". SwiftUI-only solution = wrap NSViewRepresentable ก็ไม่ work เพราะ button event ถูกตัดไปแล้วก่อนถึง view. คุ้มที่จะ drop เป็น AppKit เพราะ NSStatusItem + NSPopover แค่ ~80 LOC ได้ control เต็ม
+- **How to apply:** ถ้า requirement บอก "right-click ทำ X" หรือ "modifier-click ทำ Y" บน menu bar icon → หยุดคิดเรื่อง MenuBarExtra ทันที, ไป AppDelegate + NSStatusItem โดยตรง. หากเดิม app ใช้ MenuBarExtra อยู่แล้ว, migrate cost = ~1-2 ชม. (รวมเขียน Settings scene กลับ + popover sizing)
+
+---
+
+### `withObservationTracking` เป็น single-fire — ต้อง re-subscribe ภายใน `onChange`
+
+- **Trigger:** ต้องการ propagate `@Observable` state changes ไป AppKit/UIKit imperative code (เช่น set `NSStatusItem.button.image` เมื่อ status เปลี่ยน) — ไม่อยู่ใน SwiftUI view tree
+- **Rule:** `withObservationTracking { read } onChange: { ... }` fire `onChange` เพียง **ครั้งเดียว** ต่อการ subscribe — ใน `onChange` ต้อง schedule กลับไป main actor แล้วเรียก function ตัวเองอีกครั้งเพื่อ re-subscribe:
+  ```swift
+  private func observeStatus() {
+      withObservationTracking { [weak self] in
+          _ = self?.appState.status
+      } onChange: {
+          Task { @MainActor [weak self] in
+              guard let self else { return }
+              self.applyToButton()
+              self.observeStatus()  // re-arm
+          }
+      }
+  }
+  ```
+- **ระวัง:** `onChange` block ถูกเรียก nonisolated และ before การ mutation เสร็จสิ้น — อ่าน `appState.status` ตรงๆ ใน `onChange` จะได้ค่าเก่า. ใช้ `Task { @MainActor in self.applyToButton() }` เพื่อข้ามไป next runloop tick
+- **Why (incident 2026-04-25):** Phase 2 wire `appState.status → NSStatusItem.button.image`. ถ้าไม่ re-subscribe → button update ครั้งแรกแล้วค้าง. forgot-to-re-arm คือ pitfall ที่พบบ่อยที่สุดของ Observation API
+- **How to apply:** ใช้ pattern นี้เฉพาะที่ต้อง bridge `@Observable` → AppKit imperative. ใน SwiftUI view ไม่ต้องทำ — view tree handle ให้เอง
+
+---
+
 ### MainActor-isolated init ใช้เป็น default parameter value ไม่ได้
 
 - **Trigger:** เขียน `init(dep: any Foo = RealFoo())` ที่ `RealFoo()` is `@MainActor` (implicit จาก project default หรือ explicit) → compile fail "call to main actor-isolated initializer 'init()' in a synchronous nonisolated context"

@@ -87,6 +87,37 @@ Plan เดิมใน `docs/plans/phase-1-global-hotkey.md` เป็นแค
 1. ✅ Phase 0 — Core mute engine + talk-while-muted
 2. ✅ Phase 1 — Global hotkey + PTT + settings
 3. ✅ Pre-Phase 2 — `MicStatus` enum + derived view state, `MuteStateMachine` + `TalkingDebouncer` extract, DI refactor, **43 unit tests** (~99% business logic coverage; HAL wrappers excluded by design)
-4. Phase 2 — Static mascot face (free tier)  ← ขั้นถัดไป
-5. Phase 3 — Floating overlay window
+4. ✅ Phase 2 — Static mascot face (free tier) + right-click tray quick mute, **60 unit tests** (+17: MascotPose × 8, TrayClickRouter × 9)
+5. Phase 3 — Floating overlay window  ← ขั้นถัดไป
 6. Phase 4 — Animated pets + StoreKit 2 IAP
+
+---
+
+## Phase 2 Review
+
+**Status:** ✅ Build + tests pass (60/60). Manual verification pending user.
+
+### Scope delivered
+- `Mewt/Mascot/MascotPose.swift` — pure `MicStatus → (eyes, mouth, accent, a11y)` mapping
+- `Mewt/Mascot/MascotFace.swift` — SwiftUI shape-based face rendered into popover header
+- `Mewt/Tray/TrayClickRouter.swift` — pure click→action routing (`.left` opens popover, `.right`/`.leftWithControl` toggle mute)
+- `Mewt/Tray/TrayController.swift` — NSStatusItem + NSPopover wrapper, button image driven by `withObservationTracking` re-subscribe loop
+- `Mewt/MewtApp.swift` — switched from `MenuBarExtra` to `NSApplicationDelegateAdaptor(AppDelegate)`; AppDelegate guards hardware setup under XCTest
+- `Mewt/ContentView.swift` — popover header now uses `MascotFace`
+- `MewtTests/MascotPoseTests.swift` (8 tests), `MewtTests/TrayClickRouterTests.swift` (9 tests)
+
+### Why migrate off MenuBarExtra
+SwiftUI's `MenuBarExtra` does not surface right-click events distinct from left-click — both open the menu. Phase 2's "quick toggle on right-click" required dropping back to AppKit (`NSStatusItem` + `NSPopover` + `button.sendAction(on: [.leftMouseUp, .rightMouseUp])`). Cost: ~80 LOC of AppKit boilerplate; benefit: full event-mask control + ctrl-click support as a free extra.
+
+### Verification (manual — pending user test)
+- [ ] Right-click menu bar icon while popover is hidden → mute toggles (icon flips to slashed mic)
+- [ ] Left-click → popover opens with mascot face header
+- [ ] Ctrl+click → behaves like right-click (toggles mute)
+- [ ] Mascot face changes through all 4 expressions: idle (😺), sleeping (😴 + Z), alarmed (🙀 + !), PTT (🗣️ + waveform)
+- [ ] Talking-while-muted tints menu bar icon red
+- [ ] Tooltip on icon reads "<state> — left-click to open, right-click to toggle mute"
+
+### Out of scope (deferred)
+- Animated mascot motion / level-driven scaling (Phase 4 paid tier)
+- Custom mascot artwork (Phase 4)
+- Floating overlay (Phase 3)

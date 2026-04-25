@@ -7,8 +7,8 @@ struct ContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Text(appState.status.emoji).font(.system(size: 28))
+            HStack(spacing: 12) {
+                MascotFace(pose: .from(appState.status), size: 56)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(appState.status.label).font(.headline)
                     if !appState.statusMessage.isEmpty {
@@ -17,6 +17,7 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                Spacer(minLength: 0)
             }
 
             Button {
