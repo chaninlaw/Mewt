@@ -62,3 +62,68 @@
 - **Rule:** ต้อง `import AppKit` (หรือโมดูลที่ define member จริง) ใน file ที่ใช้ — แม้ library ที่ `import` จะ re-export ก็ไม่พอ
 - **Why:** Phase 1 ครั้งแรก compile fail "`.option` is not available due to missing import of defining module 'AppKit'" แม้ `import KeyboardShortcuts` แล้ว Swift upcoming feature นี้ปิด transitive member visibility เพื่อให้ dependency ชัดเจน
 - **How to apply:** เมื่อเจอ "X is not available due to missing import of defining module Y" → เพิ่ม `import Y` ใน file นั้น (ไม่ใช่ใน library)
+
+---
+
+### Hand-edit `project.pbxproj` เพิ่ม test target — feasible ถ้าใช้ objectVersion 77+
+
+- **Trigger:** ต้องการเพิ่ม unit test target แต่ไม่สะดวก / ไม่ต้องการให้ user เปิด Xcode GUI (เช่น Claude Code automation)
+- **Rule:** ถ้า project ใช้ `PBXFileSystemSynchronizedRootGroup` (objectVersion 77+, Xcode 16+) → hand-edit ได้ไม่เจ็บ เพราะไฟล์ใหม่ auto-include ผ่าน group, ไม่ต้องเพิ่ม `PBXBuildFile` ทีละไฟล์
+- **Sections ที่ต้องเพิ่มครบ (9 sections):** `PBXContainerItemProxy`, `PBXFileReference` (xctest product), `PBXFileSystemSynchronizedRootGroup` (tests folder), `PBXFrameworksBuildPhase`, `PBXGroup` (update mainGroup + Products), `PBXNativeTarget` (productType `com.apple.product-type.bundle.unit-test`), `PBXProject.targets`, `PBXResourcesBuildPhase`, `PBXSourcesBuildPhase`, `PBXTargetDependency`, `XCBuildConfiguration` × 2, `XCConfigurationList`
+- **Build settings สำคัญสำหรับ hosted test bundle:** `TEST_HOST = $(BUILT_PRODUCTS_DIR)/<App>.app/Contents/MacOS/<App>`, `BUNDLE_LOADER = $(TEST_HOST)`, `PRODUCT_BUNDLE_IDENTIFIER = <app-id>.Tests`, `GENERATE_INFOPLIST_FILE = YES`
+- **UUID naming:** ใช้ prefix ที่ไม่ชนของเดิม (เช่น Mewt ใช้ `BCB6C34x/BCB6C3xx` → test ใช้ `BCB6C501...`) 24 hex chars
+- **ไม่ต้องสร้าง `.xcscheme` file** ถ้า scheme หลักมีอยู่แล้ว — `xcodebuild test -scheme <AppScheme>` auto-discover test target ที่ลิงก์ด้วย `PBXTargetDependency`
+- **Why (incident 2026-04-25):** เพิ่ม test target สำหรับ Mewt จาก scratch โดย hand-edit pbxproj — สำเร็จครั้งแรก, 15 tests run passed ภายใน 0.003s. โจทย์: `PBXFileSystemSynchronizedRootGroup` ตัด step ที่เจ็บที่สุด (file-reference churn) ออก — ก่อน Xcode 16 ต้องเพิ่ม PBXBuildFile + PBXFileReference ทุก test file ซึ่ง error-prone
+- **How to apply:** ก่อน edit commit pbxproj ไว้ก่อน — ถ้าพลาด `git checkout HEAD -- project.pbxproj` revert ทันทีโดยไม่กระทบไฟล์ Swift ที่แก้คู่กัน
+
+---
+
+### `XCTestConfigurationFilePath` env guard สำหรับ app target ที่ host test
+
+- **Trigger:** macOS/iOS app target ที่ eagerly init hardware (mic, camera, network) ใน `@main` → hosted unit test bundle run จะไป launch app ซึ่ง fire side effects (permission prompt, mute เสียงจริง)
+- **Rule:** ใน init ของ root state object (เช่น `AppState`) guard:
+  ```swift
+  guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
+  start()
+  ```
+- **Why:** Mewt มี `AppState.init() → start()` ที่เปิด `AVAudioEngine` + register CoreAudio listener + mute/unmute HAL. Hosted test bundle (TEST_HOST=Mewt.app) launch app เข้า test process → ถ้าไม่ guard ทุก `xcodebuild test` จะ prompt mic permission และเล่นกับ physical mic ของ dev จริง
+- **How to apply:** เฉพาะ app ที่ hardware-heavy หรือ network-heavy — app ธรรมดา init ปลอดภัยไม่ต้อง guard. Pair กับ "wire callbacks (safe) แยกจาก start hardware (env-guarded)" pattern เพื่อให้ test ใช้ mocks + wired callbacks ได้โดยไม่ผ่าน guard
+
+---
+
+### Adding `@MainActor` protocol conformance ทำให้ Swift strict-check static property isolation
+
+- **Trigger:** มี class implicitly `@MainActor` (เช่น project ตั้ง `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`) ที่มี static property + deinit/C-callback อ่าน static นั้น → เพิ่ม `: SomeMainActorProtocol` conformance → compile error "Main actor-isolated static property X can not be referenced from a nonisolated context"
+- **Rule:** สำหรับ static ที่เป็น POD CoreAudio struct, AudioObjectPropertyAddress, หรือ value pure: ใช้ `nonisolated private static let X = ...`. สำหรับ `@convention(c)` closure / function pointer ที่ Swift ไม่ infer ว่า Sendable: ใช้ `nonisolated(unsafe) private static let X: ... = { ... }`
+- **Why (incident 2026-04-25):** เพิ่ม `MicMuteControlling: AnyObject` (`@MainActor`) ให้ `MicMuteController` → static `defaultInputDeviceAddress`, `devicesAddress`, `topologyListener` ถูก strictly check → `deinit` (nonisolated by default) เข้าถึงไม่ได้. เคย compile ผ่านก่อน conform เพราะ Swift implicit-isolation tolerant กว่า explicit. Fix แค่ใส่ `nonisolated` ก็จบ — ไม่ต้องแยก class
+- **How to apply:** เจอ error ลักษณะ "Main actor-isolated X can not be referenced from a nonisolated context" หลังเพิ่ม protocol → ตรวจ deinit / C callback / `@convention(c)` closure แล้ว mark statics เป็น `nonisolated` (ไม่ใช่ `nonisolated(unsafe)` ก่อน — ใส่ `unsafe` เฉพาะตอน Swift บ่นว่า value ไม่ Sendable)
+
+---
+
+### Time-based test edges: `Date.addingTimeInterval` Double precision พังที่ boundary
+
+- **Trigger:** ทดสอบ time-based state machine โดยเลือก timestamp แบบ `t0.addingTimeInterval(2.3)` ในจุดที่ logic เช็ค `>= 0.3` หรือ boundary อื่น
+- **Issue:** Double แทน 2.3 ไม่ได้เป๊ะ (= 2.2999999...) แต่แทน 2.0 ได้เป๊ะ (integer) → diff = 2.2999998 < 0.3 ที่ Double เก็บเป็น 0.2999999889 → boundary check ที่ "ควรจะ true" กลับ false ที่ random test
+- **Rule:**
+  1. ใช้ค่า exact-binary (powers of 2: 0.5, 0.25, 0.125, 1.0, 2.0) สำหรับ "delta" timestamps
+  2. ห้ามใส่ value ตรงกับ threshold เป๊ะ (0.3 sustain → ทดสอบที่ 0.5, ไม่ใช่ 0.3)
+  3. ถ้าจำเป็นต้องทดสอบ "just under" / "just over" boundary → ใช้ค่า binary-exact ที่อยู่ขอบใกล้เคียง (0.29 < 0.3, 0.31 > 0.3) แทนการพึ่ง equality
+- **Why (incident 2026-04-25):** Tier 3 `TalkingDebouncerTests.resetRequiresFreshSustain` fail เพราะ `t0.addingTimeInterval(2.3) - t0.addingTimeInterval(2.0) ≈ 0.2999999998` ซึ่ง `< 0.3` Double. แก้โดยเปลี่ยน 2.3 → 2.5 (0.5 exact, gap ห่างจากขอบ 0.3 มากพอ)
+- **How to apply:** ก่อนเขียน time-based test, ถ้า logic เช็ค `>= duration` ให้เลือก test gap ห่างจาก duration อย่างน้อย 1.5x หรือใช้ค่า binary-exact
+
+---
+
+### MainActor-isolated init ใช้เป็น default parameter value ไม่ได้
+
+- **Trigger:** เขียน `init(dep: any Foo = RealFoo())` ที่ `RealFoo()` is `@MainActor` (implicit จาก project default หรือ explicit) → compile fail "call to main actor-isolated initializer 'init()' in a synchronous nonisolated context"
+- **Why:** Default parameter values ถูก evaluate ใน synthetic non-isolated context ที่ Swift gen เอง — ไม่สืบ caller's isolation
+- **Rule:** ใช้ pattern 2-init แทน:
+  ```swift
+  convenience init() {
+      self.init(dep: RealFoo())  // caller's @MainActor inferred
+  }
+  init(dep: any Foo) { ... }     // designated, no defaults
+  ```
+- **Alternative:** `init(dep: (any Foo)? = nil)` แล้ว `self.dep = dep ?? RealFoo()` ใน body — ก็ได้แต่ต้องระวัง accidental nil pass
+- **Why (incident 2026-04-25):** Tier 2 DI refactor `AppState.init(muteController: any MicMuteControlling = MicMuteController(), ...)` → fail แม้ `AppState` คือ `@MainActor`. Fix ด้วย convenience init pattern
+- **How to apply:** ทุกครั้งที่อยากให้ caller ไม่ต้องระบุ deps ใน production แต่ test inject mocks ได้ → 2-init pattern คือ idiomatic Swift, ไม่ใช่ workaround

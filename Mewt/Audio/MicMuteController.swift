@@ -2,7 +2,15 @@ import CoreAudio
 import Foundation
 import os
 
-final class MicMuteController {
+@MainActor
+protocol MicMuteControlling: AnyObject {
+    var onDefaultDeviceChanged: (() -> Void)? { get set }
+    @discardableResult func mute() -> Bool
+    @discardableResult func unmute() -> Bool
+    func startObservingDeviceChange()
+}
+
+final class MicMuteController: MicMuteControlling {
     private let log = Logger(subsystem: "com.chaninlaw.Mewt", category: "MicMute")
     private var savedVolumes: [AudioDeviceID: Float] = [:]
     private var isObservingDefault = false
@@ -108,19 +116,19 @@ final class MicMuteController {
 
     // MARK: - CoreAudio helpers
 
-    private static var defaultInputDeviceAddress = AudioObjectPropertyAddress(
+    nonisolated private static let defaultInputDeviceAddress = AudioObjectPropertyAddress(
         mSelector: kAudioHardwarePropertyDefaultInputDevice,
         mScope: kAudioObjectPropertyScopeGlobal,
         mElement: kAudioObjectPropertyElementMain
     )
 
-    private static var devicesAddress = AudioObjectPropertyAddress(
+    nonisolated private static let devicesAddress = AudioObjectPropertyAddress(
         mSelector: kAudioHardwarePropertyDevices,
         mScope: kAudioObjectPropertyScopeGlobal,
         mElement: kAudioObjectPropertyElementMain
     )
 
-    private static let topologyListener: AudioObjectPropertyListenerProc = {
+    nonisolated(unsafe) private static let topologyListener: AudioObjectPropertyListenerProc = {
         _, _, _, clientData in
         guard let clientData else { return noErr }
         let controller = Unmanaged<MicMuteController>.fromOpaque(clientData).takeUnretainedValue()

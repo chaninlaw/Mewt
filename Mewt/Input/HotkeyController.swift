@@ -3,7 +3,15 @@ import KeyboardShortcuts
 import os
 
 @MainActor
-final class HotkeyController {
+protocol HotkeyProviding: AnyObject {
+    var onToggle: (() -> Void)? { get set }
+    var onPTTDown: (() -> Void)? { get set }
+    var onPTTUp: (() -> Void)? { get set }
+    func start()
+}
+
+@MainActor
+final class HotkeyController: HotkeyProviding {
     var onToggle: (() -> Void)?
     var onPTTDown: (() -> Void)?
     var onPTTUp: (() -> Void)?

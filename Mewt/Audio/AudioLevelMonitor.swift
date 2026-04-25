@@ -2,11 +2,21 @@ import AVFoundation
 import Foundation
 import os
 
+@MainActor
+protocol AudioLevelMonitoring: AnyObject {
+    var onLevelUpdate: ((Float, Bool) -> Void)? { get set }
+    func start() throws
+    func stop()
+}
+
 /// Taps the system input node to measure RMS amplitude. Works even when
 /// `MicMuteController` has zeroed the input volume, because AVAudioEngine
 /// receives the raw input stream before system-level volume is applied to
 /// the signal that other apps consume.
-final class AudioLevelMonitor {
+///
+/// The "is talking" decision is delegated to `TalkingDebouncer` so the
+/// time-based hysteresis can be unit-tested without an audio engine.
+final class AudioLevelMonitor: AudioLevelMonitoring {
     private let log = Logger(subsystem: "com.chaninlaw.Mewt", category: "LevelMonitor")
     private let engine = AVAudioEngine()
     private var running = false
@@ -15,18 +25,7 @@ final class AudioLevelMonitor {
     /// second arg is a debounced "isTalking" boolean.
     var onLevelUpdate: ((Float, Bool) -> Void)?
 
-    /// RMS threshold above which we consider the user to be speaking.
-    var voiceThreshold: Float = 0.02
-
-    /// Minimum sustained time above threshold to trigger "talking".
-    var minTalkingDuration: TimeInterval = 0.3
-
-    /// Time without signal before resetting "talking" state.
-    var silenceResetDuration: TimeInterval = 0.8
-
-    private var firstAboveThresholdAt: Date?
-    private var lastAboveThresholdAt: Date?
-    private var lastTalkingState: Bool = false
+    private var debouncer = TalkingDebouncer()
 
     func start() throws {
         guard !running else { return }
@@ -69,33 +68,11 @@ final class AudioLevelMonitor {
         let total = Float(frameLength * channelCount)
         let rms = (total > 0) ? sqrt(sumSquares / total) : 0
 
-        let now = Date()
-        if rms >= voiceThreshold {
-            if firstAboveThresholdAt == nil {
-                firstAboveThresholdAt = now
-            }
-            lastAboveThresholdAt = now
-        } else {
-            if let last = lastAboveThresholdAt,
-               now.timeIntervalSince(last) >= silenceResetDuration {
-                firstAboveThresholdAt = nil
-                lastAboveThresholdAt = nil
-            }
-        }
-
-        let isTalking: Bool = {
-            guard let first = firstAboveThresholdAt,
-                  let last = lastAboveThresholdAt else { return false }
-            let sustained = last.timeIntervalSince(first) >= minTalkingDuration
-            let recent = now.timeIntervalSince(last) < silenceResetDuration
-            return sustained && recent
-        }()
-
+        let isTalking = debouncer.observe(rms: rms, now: Date())
         let level = min(1.0, rms * 4)
 
         DispatchQueue.main.async { [weak self] in
             self?.onLevelUpdate?(level, isTalking)
-            self?.lastTalkingState = isTalking
         }
     }
 }

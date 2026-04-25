@@ -5,83 +5,103 @@ import Observation
 @Observable
 @MainActor
 final class AppState {
-    var isMuted: Bool = false
     var inputLevel: Float = 0
-    var isTalkingWhileMuted: Bool = false
-    var statusMessage: String = "Ready"
-    var pttActive: Bool = false
+    var isSpeechDetected: Bool = false
+    var statusMessage: String = ""
 
-    private var targetMuted: Bool = false
-    private let muteController = MicMuteController()
-    private let levelMonitor = AudioLevelMonitor()
-    private let hotkeys = HotkeyController()
+    private var muteState = MuteStateMachine()
 
-    init() {
-        start()
+    var isMuted: Bool { muteState.physicalMuted }
+    var pttActive: Bool { muteState.pttActive }
+    var isTalkingWhileMuted: Bool { muteState.physicalMuted && isSpeechDetected }
+
+    var status: MicStatus {
+        if muteState.pttActive { return .pushToTalk }
+        if isTalkingWhileMuted { return .talkingWhileMuted }
+        return muteState.physicalMuted ? .muted : .unmuted
     }
 
-    private func start() {
+    private let muteController: any MicMuteControlling
+    private let levelMonitor: any AudioLevelMonitoring
+    private let hotkeys: any HotkeyProviding
+
+    convenience init() {
+        self.init(
+            muteController: MicMuteController(),
+            levelMonitor: AudioLevelMonitor(),
+            hotkeys: HotkeyController()
+        )
+    }
+
+    init(
+        muteController: any MicMuteControlling,
+        levelMonitor: any AudioLevelMonitoring,
+        hotkeys: any HotkeyProviding
+    ) {
+        self.muteController = muteController
+        self.levelMonitor = levelMonitor
+        self.hotkeys = hotkeys
+        wireCallbacks()
+    }
+
+    /// Brings up hardware: CoreAudio device listener, AVAudioEngine input tap,
+    /// Carbon hotkey registration. Skipped under XCTest so test runs don't
+    /// twiddle the real mic or prompt for permission.
+    func start() {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
+        muteController.startObservingDeviceChange()
+        do {
+            try levelMonitor.start()
+        } catch {
+            statusMessage = "Mic permission needed"
+        }
+        hotkeys.start()
+    }
+
+    private func wireCallbacks() {
         muteController.onDefaultDeviceChanged = { [weak self] in
             guard let self else { return }
             self.applyMuteState()
             self.statusMessage = "Input device changed"
         }
-        muteController.startObservingDeviceChange()
-
         levelMonitor.onLevelUpdate = { [weak self] level, isTalking in
             guard let self else { return }
             self.inputLevel = level
-            self.isTalkingWhileMuted = self.isMuted && isTalking
+            self.isSpeechDetected = isTalking
         }
-
-        do {
-            try levelMonitor.start()
-            statusMessage = "Listening"
-        } catch {
-            statusMessage = "Mic permission needed"
-        }
-
         hotkeys.onToggle = { [weak self] in self?.toggleMute() }
         hotkeys.onPTTDown = { [weak self] in self?.pttDown() }
         hotkeys.onPTTUp = { [weak self] in self?.pttUp() }
-        hotkeys.start()
     }
 
     func toggleMute() {
-        targetMuted.toggle()
+        muteState.apply(.toggle)
         applyMuteState()
     }
 
     func pttDown() {
-        guard !pttActive else { return }
-        pttActive = true
+        muteState.apply(.pttDown)
         applyMuteState()
     }
 
     func pttUp() {
-        guard pttActive else { return }
-        pttActive = false
+        muteState.apply(.pttUp)
         applyMuteState()
     }
 
-    /// Single source of truth: physical mute = targetMuted && !pttActive.
-    /// Called on every state transition + device change so HAL always matches intent.
+    /// Syncs HAL to intended state. Called on every transition + device change
+    /// so the physical mic always matches `muteState.physicalMuted`.
     private func applyMuteState() {
-        let shouldMute = targetMuted && !pttActive
-        if shouldMute {
+        if muteState.physicalMuted {
             if muteController.mute() {
-                isMuted = true
-                statusMessage = "Muted"
+                statusMessage = ""
             } else {
-                targetMuted = false
-                isMuted = false
+                muteState.apply(.muteFailed)
                 statusMessage = "Device doesn't support mute"
             }
         } else {
             muteController.unmute()
-            isMuted = false
-            isTalkingWhileMuted = false
-            statusMessage = pttActive ? "Push-to-talk" : "Unmuted"
+            statusMessage = ""
         }
     }
 

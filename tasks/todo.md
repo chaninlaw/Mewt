@@ -85,7 +85,8 @@ Plan เดิมใน `docs/plans/phase-1-global-hotkey.md` เป็นแค
 
 ### Next phases
 1. ✅ Phase 0 — Core mute engine + talk-while-muted
-2. ✅ Phase 1 — Global hotkey + PTT + settings  ← ยืนอยู่ตรงนี้
-3. Phase 2 — Static mascot face (free tier)
-4. Phase 3 — Floating overlay window
-5. Phase 4 — Animated pets + StoreKit 2 IAP
+2. ✅ Phase 1 — Global hotkey + PTT + settings
+3. ✅ Pre-Phase 2 — `MicStatus` enum + derived view state, `MuteStateMachine` + `TalkingDebouncer` extract, DI refactor, **43 unit tests** (~99% business logic coverage; HAL wrappers excluded by design)
+4. Phase 2 — Static mascot face (free tier)  ← ขั้นถัดไป
+5. Phase 3 — Floating overlay window
+6. Phase 4 — Animated pets + StoreKit 2 IAP

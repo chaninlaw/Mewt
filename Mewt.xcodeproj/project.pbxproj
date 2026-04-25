@@ -10,14 +10,30 @@
 		BCB6C40100000000000000A1 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = BCB6C40200000000000000A2 /* KeyboardShortcuts */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		BCB6C50100000000000000B8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BCB6C3432F9A113500934366 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BCB6C34A2F9A113500934366;
+			remoteInfo = Mewt;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		BCB6C34B2F9A113500934366 /* Mewt.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mewt.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BCB6C50100000000000000B6 /* MewtTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MewtTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		BCB6C34D2F9A113500934366 /* Mewt */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Mewt;
+			sourceTree = "<group>";
+		};
+		BCB6C50100000000000000B1 /* MewtTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MewtTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -31,6 +47,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BCB6C50100000000000000B4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -38,6 +61,7 @@
 			isa = PBXGroup;
 			children = (
 				BCB6C34D2F9A113500934366 /* Mewt */,
+				BCB6C50100000000000000B1 /* MewtTests */,
 				BCB6C34C2F9A113500934366 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -46,6 +70,7 @@
 			isa = PBXGroup;
 			children = (
 				BCB6C34B2F9A113500934366 /* Mewt.app */,
+				BCB6C50100000000000000B6 /* MewtTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -75,6 +100,29 @@
 			productName = Mewt;
 			productReference = BCB6C34B2F9A113500934366 /* Mewt.app */;
 			productType = "com.apple.product-type.application";
+		};
+		BCB6C50100000000000000B2 /* MewtTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BCB6C50100000000000000BB /* Build configuration list for PBXNativeTarget "MewtTests" */;
+			buildPhases = (
+				BCB6C50100000000000000B3 /* Sources */,
+				BCB6C50100000000000000B4 /* Frameworks */,
+				BCB6C50100000000000000B5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BCB6C50100000000000000B7 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				BCB6C50100000000000000B1 /* MewtTests */,
+			);
+			name = MewtTests;
+			packageProductDependencies = (
+			);
+			productName = MewtTests;
+			productReference = BCB6C50100000000000000B6 /* MewtTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -109,12 +157,20 @@
 			projectRoot = "";
 			targets = (
 				BCB6C34A2F9A113500934366 /* Mewt */,
+				BCB6C50100000000000000B2 /* MewtTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		BCB6C3492F9A113500934366 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BCB6C50100000000000000B5 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -131,7 +187,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BCB6C50100000000000000B3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		BCB6C50100000000000000B7 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BCB6C34A2F9A113500934366 /* Mewt */;
+			targetProxy = BCB6C50100000000000000B8 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		BCB6C3542F9A113600934366 /* Debug */ = {
@@ -324,6 +395,50 @@
 			};
 			name = Release;
 		};
+		BCB6C50100000000000000B9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XF37F9J9C6;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.chaninlaw.MewtTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Mewt.app/Contents/MacOS/Mewt";
+			};
+			name = Debug;
+		};
+		BCB6C50100000000000000BA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XF37F9J9C6;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.chaninlaw.MewtTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Mewt.app/Contents/MacOS/Mewt";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -341,6 +456,15 @@
 			buildConfigurations = (
 				BCB6C3572F9A113600934366 /* Debug */,
 				BCB6C3582F9A113600934366 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BCB6C50100000000000000BB /* Build configuration list for PBXNativeTarget "MewtTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BCB6C50100000000000000B9 /* Debug */,
+				BCB6C50100000000000000BA /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

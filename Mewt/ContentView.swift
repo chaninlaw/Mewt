@@ -8,12 +8,14 @@ struct ContentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Text(statusEmoji).font(.system(size: 28))
+                Text(appState.status.emoji).font(.system(size: 28))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(statusLabel).font(.headline)
-                    Text(appState.statusMessage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text(appState.status.label).font(.headline)
+                    if !appState.statusMessage.isEmpty {
+                        Text(appState.statusMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -46,18 +48,6 @@ struct ContentView: View {
         }
         .padding(16)
         .frame(width: 280)
-    }
-
-    private var statusEmoji: String {
-        if appState.pttActive { return "🗣️" }
-        if appState.isTalkingWhileMuted { return "🙀" }
-        return appState.isMuted ? "😴" : "😺"
-    }
-
-    private var statusLabel: String {
-        if appState.pttActive { return "Talking (PTT)" }
-        if appState.isTalkingWhileMuted { return "You're on mute!" }
-        return appState.isMuted ? "Muted" : "Unmuted"
     }
 }
 
