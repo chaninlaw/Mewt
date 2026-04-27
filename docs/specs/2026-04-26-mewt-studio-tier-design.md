@@ -121,6 +121,7 @@ Imported packs appear in the picker grid (Plus's `CharacterPickerView`) with a s
 | Malformed JSON                                  | Surface line number + error from JSONDecoder               |
 | `packSchemaVersion` unsupported                 | Reject with "Pack from newer Mewt — please update"         |
 | Sprite sheet dimensions ≠ multiple of frame size | Warn but accept (nearest-neighbor renders OK)             |
+| Frame side outside {16, 32, 64, 128}            | Warn ("mascot may look padded") but accept — engine integer-snaps per engine §4.6 |
 
 Pack size limit is **10 MB** (raised from earlier 5 MB draft). Animation-heavy GIF imports often exceed 5 MB even after pre-processing; easier to relax up-front than tighten later (users hit limits and complain).
 

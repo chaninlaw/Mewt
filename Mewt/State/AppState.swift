@@ -10,13 +10,24 @@ final class AppState {
     var isSpeechDetected: Bool = false
     var statusMessage: String = ""
 
+    /// Smoothed mic amplitude (EMA ~100 ms) consumed by `PoseRenderer`
+    /// to drive its variable-fps animation. Lives here rather than in
+    /// the renderer so the smoothing state survives view recomputes.
+    var smoothedAmplitude: Double = 0
+
     /// Whether (and why) the talk-while-muted alarm can fire. Updated
     /// at `start()` and again whenever the default input device
     /// changes — the user might switch between built-in and AirPods
     /// mid-meeting.
     var talkDetection: TalkDetectionStatus = .unavailable
 
+    /// Source of mascot packs + current selection. Constructed in
+    /// `init` and immutable thereafter.
+    let catalog: CharacterCatalog
+
     private var muteState = MuteStateMachine()
+    @ObservationIgnored
+    private var amplitudeSmoother = AmplitudeSmoother()
     private let log = Logger(subsystem: "com.chaninlaw.Mewt", category: "AppState")
 
     var isMuted: Bool { muteState.physicalMuted }
@@ -47,6 +58,7 @@ final class AppState {
             muteController: MicMuteController(),
             levelMonitor: AudioLevelMonitor(),
             hotkeys: HotkeyController(),
+            catalog: AppState.makeProductionCatalog(),
             defaults: .standard
         )
     }
@@ -55,17 +67,47 @@ final class AppState {
         muteController: any MicMuteControlling,
         levelMonitor: any AudioLevelMonitoring,
         hotkeys: any HotkeyProviding,
+        catalog: CharacterCatalog? = nil,
         defaults: UserDefaults = .standard
     ) {
         self.muteController = muteController
         self.levelMonitor = levelMonitor
         self.hotkeys = hotkeys
+        self.catalog = catalog ?? AppState.makeFallbackCatalog()
         self.defaults = defaults
         // First-run default: visible. We use object(forKey:) because
         // bool(forKey:) collapses "missing" and "false" into the same
         // value, and we want missing → true.
         self.overlayVisible = (defaults.object(forKey: Self.overlayVisibleKey) as? Bool) ?? true
         wireCallbacks()
+    }
+
+    /// Production catalog: tries `BundledPackSource` first, falls back
+    /// to `SafePackSource` so the app still launches with a visible
+    /// mascot when bundled assets are missing or corrupt.
+    private static func makeProductionCatalog() -> CharacterCatalog {
+        var sources: [any PackSource] = []
+        do {
+            sources.append(try BundledPackSource())
+        } catch {
+            Logger(subsystem: "com.chaninlaw.Mewt", category: "MascotEngine")
+                .fault("BundledPackSource init failed: \(String(describing: error), privacy: .public)")
+        }
+        sources.append(SafePackSource())
+        return CharacterCatalog(
+            sources: sources,
+            defaultPackId: "com.chaninlaw.mewt.default",
+            selectionStorage: .standard
+        )
+    }
+
+    /// In-memory safe catalog for callers that didn't pass one (tests,
+    /// previews). Production should always pass a real catalog.
+    private static func makeFallbackCatalog() -> CharacterCatalog {
+        CharacterCatalog(
+            sources: [SafePackSource()],
+            defaultPackId: SafePackSource.packId
+        )
     }
 
     /// Brings up hardware: CoreAudio device listener, AVAudioEngine input tap,
@@ -147,6 +189,8 @@ final class AppState {
             guard let self else { return }
             self.inputLevel = level
             self.isSpeechDetected = isTalking
+            self.amplitudeSmoother.update(Double(level))
+            self.smoothedAmplitude = self.amplitudeSmoother.value
         }
         hotkeys.onToggle = { [weak self] in self?.toggleMute() }
         hotkeys.onPTTDown = { [weak self] in self?.pttDown() }

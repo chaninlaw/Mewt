@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# Xcode user-specific state
+xcuserdata/
+
+# Python (asset pipeline)
+__pycache__/
+*.pyc

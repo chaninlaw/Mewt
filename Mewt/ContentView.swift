@@ -8,7 +8,13 @@ struct ContentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                MascotFace(pose: .from(appState.status), size: 56)
+                PoseRenderer(
+                    status: appState.status,
+                    amplitude: appState.smoothedAmplitude,
+                    pack: appState.catalog.currentPack(),
+                    resources: appState.catalog.currentResources(),
+                    size: 64
+                )
                 VStack(alignment: .leading, spacing: 2) {
                     Text(appState.status.label).font(.headline)
                     if !appState.statusMessage.isEmpty {

@@ -1,0 +1,9 @@
+{
+  "packSchemaVersion": 1,
+  "id": "com.chaninlaw.mewt.default",
+  "name": "Mewt",
+  "author": "Mewt",
+  "version": "1.0.0",
+  "license": "proprietary",
+  "tier": "free"
+}

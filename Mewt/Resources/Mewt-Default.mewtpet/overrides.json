@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "frameRate": {
+    "amplitudeToFps": [
+      {
+        "amp": 0.0,
+        "fps": 6
+      },
+      {
+        "amp": 0.05,
+        "fps": 8
+      },
+      {
+        "amp": 0.3,
+        "fps": 12
+      },
+      {
+        "amp": 0.6,
+        "fps": 18
+      }
+    ]
+  },
+  "perPoseFpsMultiplier": {
+    "muted": 0.5,
+    "talkingWhileMuted": 1.4,
+    "pushToTalk": 1.2
+  }
+}

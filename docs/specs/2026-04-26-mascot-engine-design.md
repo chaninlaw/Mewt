@@ -197,16 +197,56 @@ All keys optional; engine has built-in defaults. Unknown keys are ignored. Forwa
 
 If a tag is missing, the renderer resolves it as:
 
-| Requested pose      | Fallback chain                        |
-| ------------------- | ------------------------------------- |
-| `talkingWhileMuted` | → `unmuted` → `idle`                  |
-| `pushToTalk`        | → `unmuted` → `idle`                  |
-| `muted`             | → `idle` (rendered frozen at frame 0) |
-| `unmuted`           | → `idle`                              |
+| Requested pose      | Fallback chain                                                  |
+| ------------------- | --------------------------------------------------------------- |
+| `talkingWhileMuted` | → `unmuted` → `idle`                                            |
+| `pushToTalk`        | → `unmuted` → `idle`                                            |
+| `muted`             | → single frame from `idle` with `loopMode == .freeze`           |
+| `unmuted`           | → `idle`                                                        |
 
 `idle` is mandatory. Loading throws `CharacterLoaderError.missingIdlePose` if absent.
 
 > **Note on `talkingWhileMuted`:** the chain skips `muted` deliberately. The alarm state means the user is *actively* talking — falling back to a frozen muted frame would visually contradict that, even with the red-tint overlay applied. `unmuted` (animated) preserves the talking sense; the alarm overlay (§6) carries the urgency.
+
+### 4.6 Frame size policy
+
+`PoseRenderer.size` is the layout box the mascot fills (default `64`). Source frames are scaled to fit that box at an **integer ratio** with nearest-neighbor sampling. Pixel art looks bad at fractional scales — a 1.39× upscale turns 1 source pixel into a smeared 1.39-pixel block. Snapping to the nearest integer ratio keeps every source pixel a discrete square on screen.
+
+#### Scale rule
+
+For frame side `f` and display side `d`:
+
+| Case      | Scale                             | Rendered size      |
+| --------- | --------------------------------- | ------------------ |
+| `f ≤ d`   | `max(1, floor(d / f))`            | `f × scale ≤ d`    |
+| `f > d`   | `1 / max(1, ceil(f / d))`         | `f × scale ≤ d`    |
+
+The rendered sprite is **centered** in the `d × d` box; leftover space is transparent. The whole sheet is offset so the active frame lands at the center — keeps `SpriteFrameView` a one-pass render with no crop+composite step.
+
+Examples at default `displaySize = 64`:
+
+| Frame side `f` | Scale | Rendered | Notes                                        |
+| -------------- | ----- | -------- | -------------------------------------------- |
+| 16             | 4×    | 64       | optimal — fills box                          |
+| 24             | 2×    | 48       | accepted, smaller than box                   |
+| 32             | 2×    | 64       | optimal (Default pack legacy size)           |
+| 48             | 1×    | 48       | accepted, smaller                            |
+| 64             | 1×    | 64       | optimal (Default pack current size)          |
+| 92             | 1/2×  | 46       | accepted, smaller                            |
+| 96             | 1/2×  | 48       | accepted, smaller                            |
+| 128            | 1/2×  | 64       | optimal — downscale loses 75% of source pixels |
+
+#### Recommended frame sizes
+
+Authors targeting Mewt's 64pt display should pick a side from **{16, 32, 64, 128}** — these scale to a full 64×64 render at integer ratios. **{24, 48, 96}** are accepted but render smaller than the box (mascot looks padded inside the layout). Anything else is accepted and integer-snapped, but will rarely fill the box cleanly.
+
+#### Per-frame size variation
+
+A pack's frames should share one side length across the whole sheet. The renderer will scale each frame independently per its own `rect.width`, so cross-frame variation produces visible mascot-size jumps on pose change. Within a single tag, `rect.width` must be uniform (loader does not enforce, but rendering is undefined if not).
+
+#### Sheet-level limits
+
+Sheet pixel dimensions and per-pack frame counts are capped only at Studio import time (§9 of the Studio spec — sheet ≤ 2048×2048, frames ≤ 64). Bundled and Plus packs ship pre-vetted and skip those checks.
 
 ## 5. Public API surface
 
@@ -337,7 +377,7 @@ enum FrameSelector {
 Algorithm:
 
 1. Look up `animation = pack.poses[pose]!` (always present after load-time fallback resolution).
-2. If `pose == .muted` → return `animation.frameRange.lowerBound` (frozen).
+2. If `animation.loopMode == .freeze` → return `animation.frameRange.lowerBound`. The loader stamps `.freeze` on a synthesized single-frame `muted` fallback when the pack omits a `muted` tag, so packs that intend "muted is still" get freeze for free; packs that ship a multi-frame `muted` range (e.g., a slow calm-breath loop) animate per `loopMode` like any other pose.
 3. Compute `fps = piecewiseLinear(amplitude, pack.overrides.amplitudeToFps) * animation.fpsMultiplier`.
 4. If `fps == 0` → return `animation.frameRange.lowerBound` (frozen; renderer also drops `TimelineView` to `.explicit`).
 5. Else: walk `animation.frameRange` according to `animation.loopMode` (`.forward` / `.reverse` / `.pingPong` / `.pingPongReverse`) using `Int(t * fps)` as the step counter.
