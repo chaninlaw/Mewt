@@ -4,11 +4,12 @@
 
 The engine + Default cat pack ship; remaining work is manual verification before merge.
 
-- [ ] Cycle all 4 `MicStatus` states in the running app:
+- [ ] Cycle all 5 `MicStatus` states in the running app:
   - [ ] `unmuted` → idle breathes (~6 fps loop, blinks once)
   - [ ] `muted` → calm breath ~3 fps + Z bobbing accent + desaturate tint
+  - [ ] `talking` → speak animation while unmuted; speaking louder visibly speeds the loop; soft "mm" near threshold doesn't flicker (hysteresis)
   - [ ] `talkingWhileMuted` → wide-eyes alarm + red tint + bounce/shake
-  - [ ] `pushToTalk` → confident speak + radial accent glow
+  - [ ] `pushToTalk` → currently shares `talking` frames (radial accent glow still applies); replace with distinct art when sourced
 - [ ] Toggle System Settings → Accessibility → Reduce Motion → confirm frames freeze + overlay motion stops
 - [ ] Idle CPU < 0.5% delta from baseline `f9a020c` (Instruments → Time Profiler attached to menu-bar process)
 - [ ] (Optional) Refine PixelLab art — `talkingWhileMuted` could read more "panicked" (PixelLab inpaint or Aseprite touch-up); rerun `scripts/build_default_pack.py` after
@@ -29,6 +30,7 @@ Headline scope: drag-drop import (`.mewtpet`, Aseprite export, APNG, GIF, single
 
 ## Backlog / deferred
 
+- **Distinct PTT art** — `pushToTalk` is aliased to `talking` frames in `scripts/build_default_pack.py` (`TAG_ALIASES`). Drop the alias and add a real PTT row to `TAG_ORDER` once unique animation is sourced.
 - **⌥Space PTT key consume** (carry-over from Phase 1) — currently the keystroke still forwards to the focused app. Needs `CGEventTap` + Accessibility permission.
 - **Talk-while-muted alarm on external USB mics** — some USB drivers apply volume scaling pre-tap stage; HAL mute silences the tap. Investigate Aggregate Device routing or `AVCaptureSession` path.
 - **i18n `MicStatus.label`** — English only; deferred per engine spec §12.
@@ -48,4 +50,4 @@ Plans:
 
 Lessons: `tasks/lessons.md`
 
-Asset pipeline: `scripts/build_default_pack.py` (reads `assets/CatMascot/` from PixelLab → emits `Mewt/Resources/Mewt-Default.mewtpet/`)
+Asset pipeline: `scripts/build_default_pack.py` (reads `assets/CatMascot/animations/` from PixelLab → emits `Mewt/Resources/Mewt-Default.mewtpet/`). Accepts `--src` / `--dest` to build alternate packs from other folders; defaults match the repo layout.

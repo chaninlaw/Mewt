@@ -13,6 +13,11 @@ struct PoseTagMappingTests {
         #expect(PoseTagMapping.tag(for: .muted) == .muted)
     }
 
+    @Test("talking → .talking")
+    func talkingMapping() {
+        #expect(PoseTagMapping.tag(for: .talking) == .talking)
+    }
+
     @Test("talkingWhileMuted → .talkingWhileMuted")
     func talkingWhileMutedMapping() {
         #expect(PoseTagMapping.tag(for: .talkingWhileMuted) == .talkingWhileMuted)
@@ -23,10 +28,9 @@ struct PoseTagMappingTests {
         #expect(PoseTagMapping.tag(for: .pushToTalk) == .pushToTalk)
     }
 
-    @Test("All MicStatus values map to a defined PoseTag")
+    @Test("All MicStatus values map to a distinct PoseTag")
     func everyStatusMaps() {
-        let cases: [MicStatus] = [.unmuted, .muted, .talkingWhileMuted, .pushToTalk]
-        let tags = Set(cases.map(PoseTagMapping.tag(for:)))
-        #expect(tags.count == cases.count)
+        let tags = Set(MicStatus.allCases.map(PoseTagMapping.tag(for:)))
+        #expect(tags.count == MicStatus.allCases.count)
     }
 }

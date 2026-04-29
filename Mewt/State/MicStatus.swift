@@ -4,9 +4,10 @@ import Foundation
 /// Derived in `AppState` from the primitive inputs (`isMuted`, `pttActive`,
 /// `isTalkingWhileMuted`) so the menu-bar icon, menu label, and — from
 /// Phase 2 onward — the mascot image all agree by construction.
-enum MicStatus: Equatable {
+enum MicStatus: Equatable, CaseIterable {
     case unmuted
     case muted
+    case talking
     case talkingWhileMuted
     case pushToTalk
 }
@@ -14,8 +15,9 @@ enum MicStatus: Equatable {
 extension MicStatus {
     var label: String {
         switch self {
-        case .unmuted:           "Unmuted"
+        case .unmuted:            "Unmuted"
         case .muted:              "Muted"
+        case .talking:            "Talking"
         case .talkingWhileMuted:  "You're on mute!"
         case .pushToTalk:         "Talking (PTT)"
         }
@@ -25,6 +27,7 @@ extension MicStatus {
         switch self {
         case .unmuted:            "😺"
         case .muted:              "😴"
+        case .talking:            "😸"
         case .talkingWhileMuted:  "🙀"
         case .pushToTalk:         "🗣️"
         }
@@ -32,8 +35,9 @@ extension MicStatus {
 
     var menuBarSymbol: String {
         switch self {
-        case .unmuted:            "mic.fill"
+        case .unmuted:             "mic.fill"
         case .muted:               "mic.slash.fill"
+        case .talking:             "waveform"
         case .talkingWhileMuted:   "exclamationmark.triangle.fill"
         case .pushToTalk:          "mic.badge.plus"
         }

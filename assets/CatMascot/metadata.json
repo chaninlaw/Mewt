@@ -24,44 +24,44 @@
       "south-west": "rotations/south-west.png"
     },
     "animations": {
-      "alarmed_wide_eyes_mouth_opening-closing_rapidly_pa-5f72da6d": {
+      "talking-while-muted": {
         "south": [
-          "animations/alarmed_wide_eyes_mouth_opening-closing_rapidly_pa-5f72da6d/south/frame_000.png",
-          "animations/alarmed_wide_eyes_mouth_opening-closing_rapidly_pa-5f72da6d/south/frame_001.png",
-          "animations/alarmed_wide_eyes_mouth_opening-closing_rapidly_pa-5f72da6d/south/frame_002.png",
-          "animations/alarmed_wide_eyes_mouth_opening-closing_rapidly_pa-5f72da6d/south/frame_003.png",
-          "animations/alarmed_wide_eyes_mouth_opening-closing_rapidly_pa-5f72da6d/south/frame_004.png"
+          "animations/talking-while-muted/south/frame_000.png",
+          "animations/talking-while-muted/south/frame_001.png",
+          "animations/talking-while-muted/south/frame_002.png",
+          "animations/talking-while-muted/south/frame_003.png",
+          "animations/talking-while-muted/south/frame_004.png"
         ]
       },
-      "gentle_breathing_idle_blink_once_mid-cycle_1px_hea-209d82d7": {
+      "idle": {
         "south": [
-          "animations/gentle_breathing_idle_blink_once_mid-cycle_1px_hea-209d82d7/south/frame_000.png",
-          "animations/gentle_breathing_idle_blink_once_mid-cycle_1px_hea-209d82d7/south/frame_001.png",
-          "animations/gentle_breathing_idle_blink_once_mid-cycle_1px_hea-209d82d7/south/frame_002.png",
-          "animations/gentle_breathing_idle_blink_once_mid-cycle_1px_hea-209d82d7/south/frame_003.png",
-          "animations/gentle_breathing_idle_blink_once_mid-cycle_1px_hea-209d82d7/south/frame_004.png",
-          "animations/gentle_breathing_idle_blink_once_mid-cycle_1px_hea-209d82d7/south/frame_005.png",
-          "animations/gentle_breathing_idle_blink_once_mid-cycle_1px_hea-209d82d7/south/frame_006.png"
+          "animations/idle/south/frame_000.png",
+          "animations/idle/south/frame_001.png",
+          "animations/idle/south/frame_002.png",
+          "animations/idle/south/frame_003.png",
+          "animations/idle/south/frame_004.png",
+          "animations/idle/south/frame_005.png",
+          "animations/idle/south/frame_006.png"
         ]
       },
-      "eyes_closed_calmly_mouth_zipped-219b3244": {
+      "muted": {
         "south": [
-          "animations/eyes_closed_calmly_mouth_zipped-219b3244/south/frame_000.png",
-          "animations/eyes_closed_calmly_mouth_zipped-219b3244/south/frame_001.png",
-          "animations/eyes_closed_calmly_mouth_zipped-219b3244/south/frame_002.png",
-          "animations/eyes_closed_calmly_mouth_zipped-219b3244/south/frame_003.png",
-          "animations/eyes_closed_calmly_mouth_zipped-219b3244/south/frame_004.png",
-          "animations/eyes_closed_calmly_mouth_zipped-219b3244/south/frame_005.png"
+          "animations/muted/south/frame_000.png",
+          "animations/muted/south/frame_001.png",
+          "animations/muted/south/frame_002.png",
+          "animations/muted/south/frame_003.png",
+          "animations/muted/south/frame_004.png",
+          "animations/muted/south/frame_005.png"
         ]
       },
-      "speaking_confidently_natural_mouth_open-close_eyes-21d6817d": {
+      "talking": {
         "south": [
-          "animations/speaking_confidently_natural_mouth_open-close_eyes-21d6817d/south/frame_000.png",
-          "animations/speaking_confidently_natural_mouth_open-close_eyes-21d6817d/south/frame_001.png",
-          "animations/speaking_confidently_natural_mouth_open-close_eyes-21d6817d/south/frame_002.png",
-          "animations/speaking_confidently_natural_mouth_open-close_eyes-21d6817d/south/frame_003.png",
-          "animations/speaking_confidently_natural_mouth_open-close_eyes-21d6817d/south/frame_004.png",
-          "animations/speaking_confidently_natural_mouth_open-close_eyes-21d6817d/south/frame_005.png"
+          "animations/talking/south/frame_000.png",
+          "animations/talking/south/frame_001.png",
+          "animations/talking/south/frame_002.png",
+          "animations/talking/south/frame_003.png",
+          "animations/talking/south/frame_004.png",
+          "animations/talking/south/frame_005.png"
         ]
       }
     }

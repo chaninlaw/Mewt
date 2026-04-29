@@ -23,6 +23,7 @@
   "perPoseFpsMultiplier": {
     "muted": 0.5,
     "talkingWhileMuted": 1.4,
+    "talking": 1.2,
     "pushToTalk": 1.2
   }
 }

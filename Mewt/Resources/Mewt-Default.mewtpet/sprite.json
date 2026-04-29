@@ -238,6 +238,12 @@
         "direction": "forward"
       },
       {
+        "name": "talking",
+        "from": 18,
+        "to": 23,
+        "direction": "forward"
+      },
+      {
         "name": "pushToTalk",
         "from": 18,
         "to": 23,

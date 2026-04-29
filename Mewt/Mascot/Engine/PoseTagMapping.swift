@@ -8,6 +8,7 @@ enum PoseTagMapping {
         switch status {
         case .unmuted:           return .unmuted
         case .muted:             return .muted
+        case .talking:           return .talking
         case .talkingWhileMuted: return .talkingWhileMuted
         case .pushToTalk:        return .pushToTalk
         }

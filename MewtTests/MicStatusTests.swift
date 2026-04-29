@@ -5,24 +5,28 @@ import Testing
 struct MicStatusTests {
     @Test("Every case has a distinct menu-bar SF Symbol")
     func distinctSymbols() {
-        let all: [MicStatus] = [.unmuted, .muted, .talkingWhileMuted, .pushToTalk]
-        let symbols = Set(all.map(\.menuBarSymbol))
-        #expect(symbols.count == all.count)
+        let symbols = Set(MicStatus.allCases.map(\.menuBarSymbol))
+        #expect(symbols.count == MicStatus.allCases.count)
     }
 
     @Test("Every case has a distinct emoji")
     func distinctEmoji() {
-        let all: [MicStatus] = [.unmuted, .muted, .talkingWhileMuted, .pushToTalk]
-        let emojis = Set(all.map(\.emoji))
-        #expect(emojis.count == all.count)
+        let emojis = Set(MicStatus.allCases.map(\.emoji))
+        #expect(emojis.count == MicStatus.allCases.count)
     }
 
     @Test("Every case has a non-empty label")
     func nonEmptyLabels() {
-        let all: [MicStatus] = [.unmuted, .muted, .talkingWhileMuted, .pushToTalk]
-        for status in all {
+        for status in MicStatus.allCases {
             #expect(!status.label.isEmpty, "empty label for \(status)")
         }
+    }
+
+    @Test("talking has dedicated label, emoji, and symbol")
+    func talkingPresentation() {
+        #expect(MicStatus.talking.label == "Talking")
+        #expect(MicStatus.talking.emoji == "😸")
+        #expect(MicStatus.talking.menuBarSymbol == "waveform")
     }
 
     @Test("talkingWhileMuted label signals alert, not plain 'Muted'")

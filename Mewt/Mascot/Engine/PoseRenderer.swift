@@ -138,20 +138,25 @@ private struct PoseTintModifier: ViewModifier {
     let pose: PoseTag
     let enabled: Bool
 
+    /// Stable view structure across all poses — values vary, view
+    /// identity does not. The previous version returned `AnyView` per
+    /// branch, which gave each pose a fresh identity and re-mounted
+    /// the underlying `TimelineView` on every pose change (visible to
+    /// the user as the idle loop "speeding up" when status flips
+    /// between `.unmuted` and `.talking`).
+    ///
+    /// `.compositingGroup()` is needed for the `.sourceAtop` blend to
+    /// hug the sprite alpha instead of painting a square wash; it's
+    /// cheap to leave on for non-alarm poses too.
     func body(content: Content) -> some View {
-        guard enabled else { return AnyView(content) }
-        switch pose {
-        case .muted:
-            return AnyView(content.saturation(0.7))
-        case .talkingWhileMuted:
-            return AnyView(
-                content.overlay(
-                    Color.red.opacity(0.20).blendMode(.sourceAtop)
-                )
-            )
-        default:
-            return AnyView(content)
-        }
+        let saturation: Double = (enabled && pose == .muted) ? 0.7 : 1.0
+        let alarmTint: Color = (enabled && pose == .talkingWhileMuted)
+            ? Color.red.opacity(0.30)
+            : Color.clear
+        content
+            .saturation(saturation)
+            .compositingGroup()
+            .overlay(alarmTint.blendMode(.sourceAtop))
     }
 }
 
@@ -164,6 +169,9 @@ private struct EffectOverlay: View {
     let timestamp: TimeInterval
 
     var body: some View {
+        // `.talking` deliberately falls through to no overlay — the
+        // mouth animation alone carries the visual; PTT keeps its glow
+        // accent because the keystroke itself is the user signal.
         switch pose {
         case .muted:
             zSymbol

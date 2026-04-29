@@ -129,6 +129,28 @@ struct AppStateTests {
         #expect(mute.unmuteCallCount == 1)
     }
 
+    @Test("Device change with transient mute() failure does NOT revert mute intent")
+    func deviceChangeKeepsMuteOnTransientFailure() {
+        let (app, mute, _, _, _) = makeState()
+        // First, user toggles mute successfully.
+        app.toggleMute()
+        #expect(app.isMuted == true)
+
+        // Now simulate a device hot-plug where the device list briefly
+        // empties out: `mute()` returns false. The handler must NOT
+        // call `.muteFailed` on the state machine here — that would
+        // silently un-mute the user. The intent persists; the next
+        // callback will re-apply when devices are back.
+        mute.muteShouldSucceed = false
+        mute.simulateDeviceChange()
+        #expect(app.isMuted == true, "mute intent must survive transient device-change failure")
+
+        // When devices come back (`mute()` succeeds again), state stays muted.
+        mute.muteShouldSucceed = true
+        mute.simulateDeviceChange()
+        #expect(app.isMuted == true)
+    }
+
     // MARK: - Level monitor wiring
 
     @Test("Level updates propagate to inputLevel + isSpeechDetected")
@@ -147,6 +169,74 @@ struct AppStateTests {
 
         app.toggleMute()
         #expect(app.isTalkingWhileMuted == true)
+        #expect(app.status == .talkingWhileMuted)
+    }
+
+    // MARK: - Talking state (amplitude gate while unmuted)
+
+    @Test("Unmuted + amplitude above enter threshold → .talking")
+    func talkingFiresWhileUnmuted() {
+        let (app, _, level, _, _) = makeState()
+        // VAD off — amplitude alone should drive .talking. This proves
+        // the gate is independent of `isSpeechDetected`.
+        level.simulateLevel(0.5, isTalking: false)
+        #expect(app.isTalkingNow == true)
+        #expect(app.status == .talking)
+    }
+
+    @Test("Quiet input keeps status at .unmuted (gate stays closed)")
+    func quietStaysUnmuted() {
+        let (app, _, level, _, _) = makeState()
+        level.simulateLevel(0.02, isTalking: false)
+        #expect(app.isTalkingNow == false)
+        #expect(app.status == .unmuted)
+    }
+
+    // Gate-level "drop below exit closes" is fully covered by
+    // `AmplitudeGateTests.closesAtExit`. Re-running it through
+    // `AppState.simulateLevel` would compose with `AmplitudeSmoother`'s
+    // EMA, which only decays in real wall-clock time — non-deterministic
+    // in synchronous tests without a clock-injection seam.
+
+    @Test("PTT while unmuted is a visual no-op (talking continues to show)")
+    func pttFromUnmutedDoesNotOverrideTalking() {
+        let (app, _, level, _, _) = makeState()
+        level.simulateLevel(0.5, isTalking: false)
+        #expect(app.status == .talking)
+        // PTT here is functionally a no-op — mic was already open. The
+        // mascot must NOT flash `.pushToTalk` on every keypress; it stays
+        // in whatever the underlying state was.
+        app.pttDown()
+        #expect(app.status == .talking)
+        app.pttUp()
+        #expect(app.status == .talking)
+    }
+
+    @Test("PTT while unmuted + silent stays .unmuted (no spurious .pushToTalk)")
+    func pttFromUnmutedSilentStaysUnmuted() {
+        let (app, _, _, _, _) = makeState()
+        #expect(app.status == .unmuted)
+        app.pttDown()
+        #expect(app.status == .unmuted, "PTT keypress alone must not change visible state when not muted")
+        app.pttUp()
+        #expect(app.status == .unmuted)
+    }
+
+    @Test("PTT while muted DOES show .pushToTalk (still wins over alarm)")
+    func pttFromMutedShowsPushToTalk() {
+        let (app, _, level, _, _) = makeState()
+        app.toggleMute()
+        level.simulateLevel(0.5, isTalking: true)
+        #expect(app.status == .talkingWhileMuted)
+        app.pttDown()
+        #expect(app.status == .pushToTalk, "PTT must override the alarm when it actually opens the mic")
+    }
+
+    @Test("talkingWhileMuted wins over .talking when muted with VAD speech")
+    func alarmBeatsTalking() {
+        let (app, _, level, _, _) = makeState()
+        app.toggleMute()
+        level.simulateLevel(0.5, isTalking: true)
         #expect(app.status == .talkingWhileMuted)
     }
 

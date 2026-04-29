@@ -1,29 +1,42 @@
 #!/usr/bin/env python3
 """Build Mewt-Default.mewtpet from PixelLab-generated assets.
 
-Reads animation frames from assets/CatMascot/animations/<tag-folder>/south/frame_*.png,
+Reads animation frames from <src>/<tag-folder>/south/frame_*.png,
 center-crops each 92×92 frame to 64×64 (cat occupies ~31×46 — fits easily),
 stitches into a horizontal sprite strip, and emits sprite.json + manifest.json
-+ preview.png in the standard .mewtpet folder layout.
++ preview.png in the standard .mewtpet folder layout at <dest>.
 
 Source pixel density is 1:1 (no upscaling), so the crop preserves art exactly.
+
+Defaults assume the repo layout (src=assets/CatMascot/animations,
+dest=Mewt/Resources/Mewt-Default.mewtpet). Pass --src/--dest to build
+a different pack (e.g. a Plus-tier pack from another asset folder).
 """
+import argparse
 import json
 import os
 from pathlib import Path
 from PIL import Image
 
 REPO = Path(__file__).resolve().parent.parent
-SRC  = REPO / "assets" / "CatMascot" / "animations"
-DEST = REPO / "Mewt" / "Resources" / "Mewt-Default.mewtpet"
+DEFAULT_SRC  = REPO / "assets" / "CatMascot" / "animations"
+DEFAULT_DEST = REPO / "Mewt" / "Resources" / "Mewt-Default.mewtpet"
 
 # Source-folder → engine pose tag, in sheet order. Frame count discovered at runtime.
 TAG_ORDER = [
-    ("idle",              "gentle_breathing_idle_blink_once_mid-cycle_1px_hea-209d82d7", 100),
-    ("muted",             "eyes_closed_calmly_mouth_zipped-219b3244",                    150),
-    ("talkingWhileMuted", "alarmed_wide_eyes_mouth_opening-closing_rapidly_pa-5f72da6d",  80),
-    ("pushToTalk",        "speaking_confidently_natural_mouth_open-close_eyes-21d6817d", 100),
+    ("idle",              "idle",                100),
+    ("muted",             "muted",               150),
+    ("talkingWhileMuted", "talking-while-muted",  80),
+    ("talking",           "talking",             100),
 ]
+
+# Pose-tag aliases: emit a second frameTag pointing at the same range as
+# `target`, no extra frames in the sheet. Temporary while pushToTalk
+# borrows talking visuals — drop the alias and add a distinct row to
+# TAG_ORDER once unique PTT art ships.
+TAG_ALIASES = {
+    "pushToTalk": "talking",
+}
 
 FRAME_SIDE = 64       # output frame size (engine §4.6 optimal)
 SOURCE_SIDE = 92      # PixelLab native canvas
@@ -32,11 +45,11 @@ CROP_OFFSET = (SOURCE_SIDE - FRAME_SIDE) // 2  # = 14
 CROP_BOX = (CROP_OFFSET, CROP_OFFSET, CROP_OFFSET + FRAME_SIDE, CROP_OFFSET + FRAME_SIDE)
 
 
-def collect_tag_frames():
+def collect_tag_frames(src):
     """Returns [(pose_tag, duration_ms, [PIL.Image, ...])] in sheet order."""
     out = []
     for pose, folder, dur in TAG_ORDER:
-        d = SRC / folder / "south"
+        d = src / folder / "south"
         frames = sorted(d.glob("frame_*.png"))
         assert frames, f"No frames for {pose} in {d}"
         imgs = [Image.open(f).convert("RGBA") for f in frames]
@@ -69,12 +82,18 @@ def build_sprite_sheet(tagged):
 
 
 def build_sprite_json(frames_meta, pose_ranges):
+    range_by_pose = {pose: (lo, hi) for pose, lo, hi in pose_ranges}
+    aliased = list(pose_ranges)
+    for alias, target in TAG_ALIASES.items():
+        assert target in range_by_pose, f"alias target {target} not in TAG_ORDER"
+        lo, hi = range_by_pose[target]
+        aliased.append((alias, lo, hi))
     return {
         "frames": frames_meta,
         "meta": {
             "frameTags": [
                 {"name": pose, "from": lo, "to": hi, "direction": "forward"}
-                for pose, lo, hi in pose_ranges
+                for pose, lo, hi in aliased
             ]
         },
     }
@@ -115,6 +134,9 @@ def build_overrides():
             # Engine stopped hard-coding muted=freeze, so the pack drives the pace now.
             "muted": 0.5,
             "talkingWhileMuted": 1.4,
+            # `talking` and `pushToTalk` share frames today; keep the
+            # multiplier on both so a future divergence is one line.
+            "talking": 1.2,
             "pushToTalk": 1.2,
         },
     }
@@ -126,32 +148,55 @@ def build_preview(sheet):
     return frame0.resize((128, 128), Image.NEAREST)
 
 
-def main():
-    print(f"SRC:  {SRC}")
-    print(f"DEST: {DEST}")
-    DEST.mkdir(parents=True, exist_ok=True)
+def parse_args(argv=None):
+    p = argparse.ArgumentParser(
+        description="Build a .mewtpet pack from a folder of PixelLab animation frames.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    p.add_argument(
+        "--src", type=Path, default=DEFAULT_SRC,
+        help="Source folder containing one sub-folder per pose (each with south/frame_*.png).",
+    )
+    p.add_argument(
+        "--dest", type=Path, default=DEFAULT_DEST,
+        help="Destination .mewtpet folder. Created if missing; existing files are overwritten.",
+    )
+    return p.parse_args(argv)
 
-    tagged = collect_tag_frames()
+
+def main(argv=None):
+    args = parse_args(argv)
+    src = args.src.resolve()
+    dest = args.dest.resolve()
+
+    if not src.is_dir():
+        raise SystemExit(f"--src is not a directory: {src}")
+
+    print(f"SRC:  {src}")
+    print(f"DEST: {dest}")
+    dest.mkdir(parents=True, exist_ok=True)
+
+    tagged = collect_tag_frames(src)
     sheet, frames_meta, pose_ranges = build_sprite_sheet(tagged)
     print(f"\nSheet: {sheet.size[0]}×{sheet.size[1]} px, {len(frames_meta)} frames")
     for pose, lo, hi in pose_ranges:
         print(f"  {pose:20s} frames {lo}–{hi} ({hi - lo + 1})")
 
-    sheet.save(DEST / "sprite.png", optimize=True)
+    sheet.save(dest / "sprite.png", optimize=True)
 
     sprite_json = build_sprite_json(frames_meta, pose_ranges)
-    (DEST / "sprite.json").write_text(json.dumps(sprite_json, indent=2) + "\n")
+    (dest / "sprite.json").write_text(json.dumps(sprite_json, indent=2) + "\n")
 
     manifest = build_manifest()
-    (DEST / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    (dest / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
     overrides = build_overrides()
-    (DEST / "overrides.json").write_text(json.dumps(overrides, indent=2) + "\n")
+    (dest / "overrides.json").write_text(json.dumps(overrides, indent=2) + "\n")
 
     preview = build_preview(sheet)
-    preview.save(DEST / "preview.png", optimize=True)
+    preview.save(dest / "preview.png", optimize=True)
 
-    sizes = {f.name: f.stat().st_size for f in DEST.iterdir() if f.is_file()}
+    sizes = {f.name: f.stat().st_size for f in dest.iterdir() if f.is_file()}
     print(f"\nOutput files:")
     for n, sz in sorted(sizes.items()):
         print(f"  {n:16s} {sz:>6d} bytes")

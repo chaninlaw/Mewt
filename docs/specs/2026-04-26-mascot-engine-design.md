@@ -199,6 +199,7 @@ If a tag is missing, the renderer resolves it as:
 
 | Requested pose      | Fallback chain                                                  |
 | ------------------- | --------------------------------------------------------------- |
+| `talking`           | → `unmuted` → `idle`                                            |
 | `talkingWhileMuted` | → `unmuted` → `idle`                                            |
 | `pushToTalk`        | → `unmuted` → `idle`                                            |
 | `muted`             | → single frame from `idle` with `loopMode == .freeze`           |
@@ -277,7 +278,7 @@ struct PoseAnimation: Equatable, Sendable, Codable {
 }
 
 enum PoseTag: String, Equatable, Sendable, Codable, CaseIterable {
-    case idle, muted, unmuted, talkingWhileMuted, pushToTalk
+    case idle, muted, unmuted, talking, talkingWhileMuted, pushToTalk
 }
 
 enum PackTier: String, Equatable, Sendable, Codable, Comparable {
@@ -357,11 +358,22 @@ enum PoseTagMapping {
         switch status {
         case .unmuted:           return .unmuted
         case .muted:             return .muted
+        case .talking:           return .talking
         case .talkingWhileMuted: return .talkingWhileMuted
         case .pushToTalk:        return .pushToTalk
         }
     }
 }
+
+// MicStatus.talking is derived in AppState by an `AmplitudeGate`
+// (hysteresis on `smoothedAmplitude`) and is independent of the VAD
+// `isSpeechDetected`. The gate is the friendly visual cue; the VAD
+// remains dedicated to the talkingWhileMuted alarm condition.
+//
+// The build pipeline can emit two frame tags at the same range — used
+// today so `pushToTalk` shares `talking` frames until distinct PTT art
+// is sourced. The loader keys on tag name, so each pose still resolves
+// to its own `PoseAnimation` entry independently.
 
 enum FrameSelector {
     /// Returns the index into `pack.frames` to display at time `t` for a given pose.

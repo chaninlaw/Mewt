@@ -316,6 +316,10 @@ enum CharacterLoader {
             resolved[.talkingWhileMuted] = fallback
         }
 
+        if resolved[.talking] == nil, let fallback = resolved[.unmuted] {
+            resolved[.talking] = fallback
+        }
+
         if resolved[.pushToTalk] == nil, let fallback = resolved[.unmuted] {
             resolved[.pushToTalk] = fallback
         }

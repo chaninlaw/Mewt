@@ -34,10 +34,21 @@ final class TrayController {
         }
 
         popover.behavior = .transient
-        popover.contentSize = NSSize(width: 280, height: 360)
-        popover.contentViewController = NSHostingController(
+        // Drive popover sizing from the hosting controller's preferred
+        // content size, not by pre-setting `popover.contentSize`. The
+        // pre-set + hosting-controller combo triggers AppKit's recursive
+        // layout warning on first launch ("It's not legal to call
+        // -layoutSubtreeIfNeeded on a view which is already being laid
+        // out"): the popover schedules a layout against the placeholder
+        // size, then the hosting controller asks SwiftUI for its preferred
+        // size mid-pass and re-enters layout. `.preferredContentSize`
+        // makes the hosting controller publish ideal-size changes through
+        // the proper AppKit channels, breaking the cycle.
+        let host = NSHostingController(
             rootView: ContentView().environment(appState)
         )
+        host.sizingOptions = .preferredContentSize
+        popover.contentViewController = host
 
         updateButton()
         observeStatus()
@@ -91,10 +102,19 @@ final class TrayController {
     private func updateButton() {
         guard let button = statusItem?.button else { return }
         let status = appState.status
+        // Resolve the symbol; fall back to mic.fill if the requested one
+        // doesn't exist on this macOS version so the menu bar never goes
+        // blank. `isTemplate = true` is required for `contentTintColor`
+        // to apply — without it the button keeps the symbol's native
+        // color and any tint we set is silently ignored.
         let image = NSImage(
             systemSymbolName: status.menuBarSymbol,
             accessibilityDescription: status.label
+        ) ?? NSImage(
+            systemSymbolName: "mic.fill",
+            accessibilityDescription: status.label
         )
+        image?.isTemplate = true
         // Tint alarm state red so the user spots talking-while-muted at
         // a glance from across the screen.
         if status == .talkingWhileMuted {

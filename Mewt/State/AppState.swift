@@ -15,6 +15,13 @@ final class AppState {
     /// the renderer so the smoothing state survives view recomputes.
     var smoothedAmplitude: Double = 0
 
+    /// Whether smoothed amplitude is currently above the talking-gate
+    /// threshold. Drives `MicStatus.talking` while unmuted. Distinct
+    /// from `isSpeechDetected` (the VAD): this one is amplitude-based
+    /// with hysteresis, used for friendly visual reaction; that one is
+    /// the alarm trigger for `talkingWhileMuted`.
+    var isTalkingNow: Bool = false
+
     /// Whether (and why) the talk-while-muted alarm can fire. Updated
     /// at `start()` and again whenever the default input device
     /// changes — the user might switch between built-in and AirPods
@@ -28,6 +35,8 @@ final class AppState {
     private var muteState = MuteStateMachine()
     @ObservationIgnored
     private var amplitudeSmoother = AmplitudeSmoother()
+    @ObservationIgnored
+    private var amplitudeGate = AmplitudeGate()
     private let log = Logger(subsystem: "com.chaninlaw.Mewt", category: "AppState")
 
     var isMuted: Bool { muteState.physicalMuted }
@@ -35,9 +44,16 @@ final class AppState {
     var isTalkingWhileMuted: Bool { muteState.physicalMuted && isSpeechDetected }
 
     var status: MicStatus {
-        if muteState.pttActive { return .pushToTalk }
+        // PTT pose only fires when PTT actually overrides a muted state.
+        // When already unmuted, holding PTT is a functional no-op (mic was
+        // open before, still open during) so we fall through to the normal
+        // talking/unmuted display instead of flashing a misleading "PTT"
+        // indicator on every keypress.
+        if muteState.pttActive && muteState.targetMuted { return .pushToTalk }
         if isTalkingWhileMuted { return .talkingWhileMuted }
-        return muteState.physicalMuted ? .muted : .unmuted
+        if muteState.physicalMuted { return .muted }
+        if isTalkingNow { return .talking }
+        return .unmuted
     }
 
     /// Whether the floating overlay window is shown. Persisted across
@@ -175,15 +191,38 @@ final class AppState {
     private func wireCallbacks() {
         muteController.onDefaultDeviceChanged = { [weak self] in
             guard let self else { return }
-            self.applyMuteState()
-            // We *don't* stop+start the engine here — `AudioLevelMonitor`
-            // subscribes to `AVAudioEngineConfigurationChange` and
-            // restarts the tap itself when the format actually changes.
-            // Tearing the engine down from this callback raced with the
-            // I/O thread on device switches and produced an
-            // `EXC_BAD_ACCESS` (see lessons.md).
+            self.applyMuteState(revertOnFailure: false)
             self.refreshTalkDetectionOnly()
+            // Reset audio-derived state so the post-swap device starts
+            // from a clean baseline. Without this, an in-flight EMA /
+            // open gate from the old device persists across the swap
+            // and the mascot stays stuck in `.talking` (or never
+            // re-enters it) until amplitude crosses thresholds again
+            // on the new device.
+            self.amplitudeSmoother.reset()
+            self.amplitudeGate.reset()
+            self.smoothedAmplitude = 0
+            self.isTalkingNow = false
+            self.isSpeechDetected = false
+            self.inputLevel = 0
             self.statusMessage = "Input device changed"
+            // Belt-and-suspenders restart of the level monitor.
+            // Normally `AudioLevelMonitor` reinstalls its tap from its
+            // own `AVAudioEngineConfigurationChange` observer; on some
+            // unplug/replug sequences that notification doesn't fire
+            // (or `try start()` fails silently because the new device
+            // wasn't ready), leaving the tap bound to a now-absent
+            // device and the mascot stuck. The 300 ms delay gives the
+            // engine's own observer the first shot — by the time we
+            // run, either it succeeded (our `stop()+start()` is a
+            // safe no-op-shaped restart on the same engine) or it
+            // didn't (we recover). Recreating the engine itself was
+            // the unsafe path that caused EXC_BAD_ACCESS in lessons.md;
+            // stop+start on the same engine is fine.
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                self?.startLevelMonitor()
+            }
         }
         levelMonitor.onLevelUpdate = { [weak self] level, isTalking in
             guard let self else { return }
@@ -191,6 +230,7 @@ final class AppState {
             self.isSpeechDetected = isTalking
             self.amplitudeSmoother.update(Double(level))
             self.smoothedAmplitude = self.amplitudeSmoother.value
+            self.isTalkingNow = self.amplitudeGate.update(amplitude: self.smoothedAmplitude)
         }
         hotkeys.onToggle = { [weak self] in self?.toggleMute() }
         hotkeys.onPTTDown = { [weak self] in self?.pttDown() }
@@ -212,29 +252,41 @@ final class AppState {
 
     func toggleMute() {
         muteState.apply(.toggle)
-        applyMuteState()
+        applyMuteState(revertOnFailure: true)
     }
 
     func pttDown() {
         muteState.apply(.pttDown)
-        applyMuteState()
+        applyMuteState(revertOnFailure: false)
     }
 
     func pttUp() {
         muteState.apply(.pttUp)
-        applyMuteState()
+        applyMuteState(revertOnFailure: false)
     }
 
-    /// Syncs HAL to intended state. Called on every transition + device change
-    /// so the physical mic always matches `muteState.physicalMuted`.
-    private func applyMuteState() {
+    /// Syncs HAL to intended state. Called on every transition + device
+    /// change so the physical mic always matches `muteState.physicalMuted`.
+    ///
+    /// `revertOnFailure` controls what happens when `mute()` returns false:
+    /// - `true` (user-initiated `toggleMute`): treat as "device fundamentally
+    ///    rejected mute" → revert `targetMuted` so the UI doesn't lie.
+    /// - `false` (PTT transitions, device hot-plug): treat as transient.
+    ///   `mute()` returns false when the device list is *empty* (which can
+    ///   happen briefly during unplug/replug — there's a window where the
+    ///   removed device is gone but the new one hasn't enumerated yet).
+    ///   Reverting in that window silently un-mutes the user, leaving the
+    ///   newly attached device live. Hold the intent; the next device
+    ///   callback re-applies on the new list.
+    private func applyMuteState(revertOnFailure: Bool) {
         if muteState.physicalMuted {
             if muteController.mute() {
                 statusMessage = ""
-            } else {
+            } else if revertOnFailure {
                 muteState.apply(.muteFailed)
                 statusMessage = "Device doesn't support mute"
             }
+            // else: best-effort path. Intent persists; next callback retries.
         } else {
             muteController.unmute()
             statusMessage = ""
