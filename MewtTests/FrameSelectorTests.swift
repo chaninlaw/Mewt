@@ -10,10 +10,8 @@ struct FrameSelectorTests {
         loopMode: LoopMode = .forward,
         idleRange: Range<Int> = 0..<6,
         mutedRange: Range<Int> = 6..<7,
-        ptmRange: Range<Int> = 7..<11,
         pttRange: Range<Int> = 11..<15,
         unmutedRange: Range<Int> = 0..<6,
-        ptmFpsMultiplier: Double = 1.0,
         pttFpsMultiplier: Double = 1.0
     ) -> CharacterPack {
         let frame = SpriteFrame(rect: CGRect(x: 0, y: 0, width: 32, height: 32), duration: 0.1)
@@ -23,7 +21,6 @@ struct FrameSelectorTests {
             AmplitudeFpsCurve.Knee(amp: 0, fps: 10)
         ])
         overrides.perPoseFpsMultiplier = [
-            .talkingWhileMuted: ptmFpsMultiplier,
             .pushToTalk: pttFpsMultiplier
         ]
         return CharacterPack(
@@ -34,11 +31,10 @@ struct FrameSelectorTests {
             tier: .free,
             frames: Array(repeating: frame, count: 15),
             poses: [
-                .idle:              PoseAnimation(frameRange: idleRange,    loopMode: loopMode, fpsMultiplier: 1),
-                .muted:             PoseAnimation(frameRange: mutedRange,   loopMode: .freeze,  fpsMultiplier: 1),
-                .unmuted:           PoseAnimation(frameRange: unmutedRange, loopMode: loopMode, fpsMultiplier: 1),
-                .talkingWhileMuted: PoseAnimation(frameRange: ptmRange,     loopMode: loopMode, fpsMultiplier: ptmFpsMultiplier),
-                .pushToTalk:        PoseAnimation(frameRange: pttRange,     loopMode: loopMode, fpsMultiplier: pttFpsMultiplier)
+                .idle:       PoseAnimation(frameRange: idleRange,    loopMode: loopMode, fpsMultiplier: 1),
+                .muted:      PoseAnimation(frameRange: mutedRange,   loopMode: .freeze,  fpsMultiplier: 1),
+                .unmuted:    PoseAnimation(frameRange: unmutedRange, loopMode: loopMode, fpsMultiplier: 1),
+                .pushToTalk: PoseAnimation(frameRange: pttRange,     loopMode: loopMode, fpsMultiplier: pttFpsMultiplier)
             ],
             overrides: overrides,
             extras: [:]
@@ -96,11 +92,10 @@ struct FrameSelectorTests {
             tier: .free,
             frames: Array(repeating: frame, count: 12),
             poses: [
-                .idle:    PoseAnimation(frameRange: 0..<6,  loopMode: .forward, fpsMultiplier: 1),
-                .muted:   PoseAnimation(frameRange: 6..<12, loopMode: .forward, fpsMultiplier: 1),
-                .unmuted: PoseAnimation(frameRange: 0..<6,  loopMode: .forward, fpsMultiplier: 1),
-                .talkingWhileMuted: PoseAnimation(frameRange: 0..<6, loopMode: .forward, fpsMultiplier: 1),
-                .pushToTalk:        PoseAnimation(frameRange: 0..<6, loopMode: .forward, fpsMultiplier: 1)
+                .idle:       PoseAnimation(frameRange: 0..<6,  loopMode: .forward, fpsMultiplier: 1),
+                .muted:      PoseAnimation(frameRange: 6..<12, loopMode: .forward, fpsMultiplier: 1),
+                .unmuted:    PoseAnimation(frameRange: 0..<6,  loopMode: .forward, fpsMultiplier: 1),
+                .pushToTalk: PoseAnimation(frameRange: 0..<6,  loopMode: .forward, fpsMultiplier: 1)
             ],
             overrides: overrides,
             extras: [:]

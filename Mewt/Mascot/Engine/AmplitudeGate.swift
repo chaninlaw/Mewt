@@ -5,12 +5,6 @@ import Foundation
 /// Drives the `MicStatus.talking` derivation in `AppState` so the
 /// mascot reacts to voice without flickering at the boundary.
 ///
-/// Distinct from `TalkingDebouncer` (the VAD that powers
-/// `isSpeechDetected`/`talkingWhileMuted`): that one debounces raw rms
-/// for the *alarm* condition. This one runs on `smoothedAmplitude` for
-/// a friendlier "the cat sees you talking" cue. They can fire
-/// independently and that's intentional.
-///
 /// Defaults: enter 0.08 / exit 0.04. The pack curve's first non-zero
 /// knee is at amp=0.05 (fps=8) — entering at 0.08 keeps detection above
 /// the curve toe so it only engages on meaningful loudness, and the

@@ -153,23 +153,11 @@ struct AppStateTests {
 
     // MARK: - Level monitor wiring
 
-    @Test("Level updates propagate to inputLevel + isSpeechDetected")
+    @Test("Level updates propagate to inputLevel")
     func levelUpdatesPropagate() {
         let (app, _, level, _, _) = makeState()
-        level.simulateLevel(0.42, isTalking: true)
+        level.simulateLevel(0.42)
         #expect(app.inputLevel == 0.42)
-        #expect(app.isSpeechDetected == true)
-    }
-
-    @Test("isTalkingWhileMuted requires BOTH speech AND muted")
-    func talkingWhileMutedRequiresMute() {
-        let (app, _, level, _, _) = makeState()
-        level.simulateLevel(0.5, isTalking: true)
-        #expect(app.isTalkingWhileMuted == false, "speech alone must not raise alert")
-
-        app.toggleMute()
-        #expect(app.isTalkingWhileMuted == true)
-        #expect(app.status == .talkingWhileMuted)
     }
 
     // MARK: - Talking state (amplitude gate while unmuted)
@@ -177,9 +165,7 @@ struct AppStateTests {
     @Test("Unmuted + amplitude above enter threshold → .talking")
     func talkingFiresWhileUnmuted() {
         let (app, _, level, _, _) = makeState()
-        // VAD off — amplitude alone should drive .talking. This proves
-        // the gate is independent of `isSpeechDetected`.
-        level.simulateLevel(0.5, isTalking: false)
+        level.simulateLevel(0.5)
         #expect(app.isTalkingNow == true)
         #expect(app.status == .talking)
     }
@@ -187,7 +173,7 @@ struct AppStateTests {
     @Test("Quiet input keeps status at .unmuted (gate stays closed)")
     func quietStaysUnmuted() {
         let (app, _, level, _, _) = makeState()
-        level.simulateLevel(0.02, isTalking: false)
+        level.simulateLevel(0.02)
         #expect(app.isTalkingNow == false)
         #expect(app.status == .unmuted)
     }
@@ -201,7 +187,7 @@ struct AppStateTests {
     @Test("PTT while unmuted is a visual no-op (talking continues to show)")
     func pttFromUnmutedDoesNotOverrideTalking() {
         let (app, _, level, _, _) = makeState()
-        level.simulateLevel(0.5, isTalking: false)
+        level.simulateLevel(0.5)
         #expect(app.status == .talking)
         // PTT here is functionally a no-op — mic was already open. The
         // mascot must NOT flash `.pushToTalk` on every keypress; it stays
@@ -222,22 +208,13 @@ struct AppStateTests {
         #expect(app.status == .unmuted)
     }
 
-    @Test("PTT while muted DOES show .pushToTalk (still wins over alarm)")
+    @Test("PTT while muted shows .pushToTalk (overrides muted)")
     func pttFromMutedShowsPushToTalk() {
-        let (app, _, level, _, _) = makeState()
+        let (app, _, _, _, _) = makeState()
         app.toggleMute()
-        level.simulateLevel(0.5, isTalking: true)
-        #expect(app.status == .talkingWhileMuted)
+        #expect(app.status == .muted)
         app.pttDown()
-        #expect(app.status == .pushToTalk, "PTT must override the alarm when it actually opens the mic")
-    }
-
-    @Test("talkingWhileMuted wins over .talking when muted with VAD speech")
-    func alarmBeatsTalking() {
-        let (app, _, level, _, _) = makeState()
-        app.toggleMute()
-        level.simulateLevel(0.5, isTalking: true)
-        #expect(app.status == .talkingWhileMuted)
+        #expect(app.status == .pushToTalk)
     }
 
     // MARK: - Hotkey wiring
@@ -273,7 +250,7 @@ struct AppStateTests {
 
     // MARK: - Status enum transitions
 
-    @Test("Status walks through all four cases via real events")
+    @Test("Status walks through real events end-to-end")
     func statusTransitions() {
         let (app, _, level, _, _) = makeState()
         #expect(app.status == .unmuted)
@@ -281,17 +258,18 @@ struct AppStateTests {
         app.toggleMute()
         #expect(app.status == .muted)
 
-        level.simulateLevel(0.5, isTalking: true)
-        #expect(app.status == .talkingWhileMuted)
-
         app.pttDown()
         #expect(app.status == .pushToTalk)
 
         app.pttUp()
-        #expect(app.status == .talkingWhileMuted, "back to alerting after PTT released")
+        #expect(app.status == .muted, "back to muted after PTT released")
 
-        level.simulateLevel(0.0, isTalking: false)
-        #expect(app.status == .muted)
+        app.toggleMute()
+        level.simulateLevel(0.5)
+        #expect(app.status == .talking)
+        // Closing the gate by feeding 0.0 isn't deterministic here
+        // because `AmplitudeSmoother`'s EMA decays on wall-clock time;
+        // see `AmplitudeGateTests.closesAtExit` for that branch.
     }
 
     // MARK: - Phase 1 regression
@@ -338,62 +316,5 @@ struct AppStateTests {
         first.overlayVisible = true
         let (second, _, _, _, _) = makeState(defaults: suite)
         #expect(second.overlayVisible == true)
-    }
-
-    // MARK: - Talk detection status (Phase 3)
-
-    @Test("Device change to Bluetooth flips talkDetection to disabled")
-    func talkDetectionFlipsOnBluetooth() {
-        let (app, mute, _, _, _) = makeState()
-        mute.transport = .bluetooth(deviceName: "AirPods Pro")
-        mute.simulateDeviceChange()
-        #expect(app.talkDetection == .disabledByBluetooth(deviceName: "AirPods Pro"))
-    }
-
-    @Test("Device change to wired flips talkDetection to active")
-    func talkDetectionFlipsOnWired() {
-        let (app, mute, _, _, _) = makeState()
-        mute.transport = .bluetooth(deviceName: "AirPods")
-        mute.simulateDeviceChange()
-        mute.transport = .wired
-        mute.simulateDeviceChange()
-        #expect(app.talkDetection == .active)
-    }
-
-    @Test("Device change to absent flips talkDetection to unavailable")
-    func talkDetectionFlipsOnAbsent() {
-        let (app, mute, _, _, _) = makeState()
-        mute.transport = .absent
-        mute.simulateDeviceChange()
-        #expect(app.talkDetection == .unavailable)
-    }
-
-    // MARK: - Phase 3.5 — error categorization
-
-    /// Once mic permission is denied, the only thing that can revoke
-    /// `permissionDenied` is the user re-granting in System Settings,
-    /// which fires its own re-launch path. A device hot-plug must NOT
-    /// silently flip the status back to `.active`/`.unavailable` — the
-    /// alarm wouldn't actually fire (level monitor is still off).
-    @Test("Device change does not clobber permissionDenied state")
-    func deviceChangePreservesPermissionDenied() {
-        let (app, mute, _, _, _) = makeState()
-        // No public API to set this directly; reach through a synthetic
-        // transport simulation. We verify the invariant by setting the
-        // value via a wired→absent→permissionDenied sequence: the
-        // controller's refresh path must skip the rewrite.
-        mute.transport = .wired
-        mute.simulateDeviceChange()
-        #expect(app.talkDetection == .active)
-
-        // Simulate a permission-denied state — the only public surface
-        // that produces this is `startLevelMonitor`'s catch arm, which
-        // we can't drive without a real engine. Instead, verify the
-        // adjacent invariant: refresh-only path uses the transport
-        // mapping for non-permission states, which is what the helper
-        // is for.
-        mute.transport = .absent
-        mute.simulateDeviceChange()
-        #expect(app.talkDetection == .unavailable)
     }
 }

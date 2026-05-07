@@ -310,12 +310,6 @@ enum CharacterLoader {
             )
         }
 
-        // talkingWhileMuted: → unmuted → idle. unmuted is now resolved, so
-        // we can reuse it. This deliberately skips muted (see §4.5 note).
-        if resolved[.talkingWhileMuted] == nil, let fallback = resolved[.unmuted] {
-            resolved[.talkingWhileMuted] = fallback
-        }
-
         if resolved[.talking] == nil, let fallback = resolved[.unmuted] {
             resolved[.talking] = fallback
         }

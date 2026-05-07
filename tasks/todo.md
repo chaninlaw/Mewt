@@ -1,13 +1,46 @@
 # Mewt — Task Log
 
-## Now — Cat-themed Symbol pack + tray/Settings redesign (2026-05-06)
+## Now — Retire talkWhileMuted feature (2026-05-07)
+
+User-tested wired USB with macOS 26.4.1: alarm no longer fires. Code path is **identical** to Phase 3 (`0c0f30e`) where verification passed on 2026-04-26 — diff between then and HEAD on `MicMuteController.mute()`, `AudioLevelMonitor`, `TalkingDebouncer`, `AppState.isTalkingWhileMuted` shows no behavioural change. Conclusion: macOS 26.4 → 26.4.1 dot release tightened HAL-mute enforcement so `kAudioDevicePropertyMute = 1` now silences the AVAudioEngine tap on wired devices too. There is no longer a transport on which the feature works (Bluetooth was already off; built-in / USB now match). Aggregate-Device path is the only architectural escape and is too costly relative to the value (target user just wants their mic muted reliably; macOS itself shows the orange-dot indicator). **Decision: rip the feature out cleanly.**
+
+### Scope of removal
+- **Delete files:** `Mewt/State/TalkDetectionStatus.swift`, `Mewt/Audio/TalkingDebouncer.swift`, `MewtTests/TalkDetectionStatusTests.swift`, `MewtTests/TalkingDebouncerTests.swift`
+- **`MicStatus`:** drop `.talkingWhileMuted` case + label/emoji/badge entries; keep `.talking` (mascot reaction is independent and works fine)
+- **`PoseTag`:** drop `.talkingWhileMuted` case (sprite engine simplifies; `Mewt-Default.mewtpet` cat pack will need re-rasterise — gated dark-launch flag is off so no user impact today)
+- **`AppState`:** drop `isSpeechDetected`, `talkDetection`, `isTalkingWhileMuted`, `refreshTalkDetectionOnly`; remove permissionDenied / engineStartFailed → talkDetection state mapping; keep amplitude/`isTalkingNow` path (drives mascot)
+- **`AudioLevelMonitor`:** simplify `onLevelUpdate` to `(Float) -> Void` (drop debounced-talking second arg); remove `debouncer` field
+- **UI:** remove `TalkDetectionRow` from `ContentView`; remove `Section("Talk-while-muted Detection")` from `SettingsView`; remove `talkingWhileMuted` cell from `VectorPoseView` / `SymbolPackSource` / `TrayController.composeMenuBarImage`; clean `ContentView` ProgressView tint (drop `appState.isTalkingWhileMuted` ternary)
+- **Tests:** delete the 2 test files; trim references in `AppStateTests`, `MicStatusTests`, `SymbolPackSourceTests`, `PoseTagMappingTests`, `CharacterPackCodableTests`, `FrameSelectorTests`, `CharacterLoaderTests`, `MewtpetFixtures`
+
+### Checklist
+- [x] Update `tasks/todo.md` (this section)
+- [x] Delete the 2 source files + 2 test files
+- [x] Edit `MicStatus.swift`, `AppState.swift`, `AudioLevelMonitor.swift`
+- [x] Edit `PackEnums.swift`, `PoseTagMapping.swift`, `SymbolPackSource.swift`, `VectorPoseView.swift`, `TrayController.swift`, `PoseRenderer.swift`, `CharacterLoader.swift`, `AmplitudeGate.swift`
+- [x] Edit `ContentView.swift`, `SettingsView.swift`
+- [x] Trim references in remaining test files
+- [x] `xcodebuild build` + `xcodebuild test` green — **154/154 pass** (was 183, –29 covering the retired feature)
+- [x] Add lesson to `tasks/lessons.md`
+- [x] Mark Stage 1 line about alarm-triangle obsolete; remove backlog item about USB drivers
+
+### Review (2026-05-07)
+- 4 files deleted, ~700 LOC net reduction across src + tests; no app-build breakage along the way (only SourceKit indexer noise that resolved at `xcodebuild` time, matching the lesson on transient SourceKit errors).
+- `MicStatus` is now 4 states; `PoseTag` 5 (preserves `.idle` distinction). `AmplitudeGate` doc updated; `AmplitudeSmoother` untouched.
+- `Mewt-Default.mewtpet` cat pack still ships in `Resources/` (gated by `bundledPackEnabled = false`). Its sprite sheet had a `talkingWhileMuted` row — when the flag flips back on someday, `scripts/build_default_pack.py`'s `TAG_ORDER` will need a corresponding edit. Left a TODO in the backlog rather than re-baking the pack now (it's dormant).
+- `TrayController.composeMenuBarImage` keeps the `badge:` parameter signature even though every `MicStatus.menuBarBadgeSymbol` now returns `nil`. Cheap optionality for the next badge-bearing state, and the function keeps a stable canvas size which (per the existing comment) prevents menu-bar reflow on transitions. No-cost insurance.
+- One test (`Status walks through real events end-to-end`) initially failed because I added a "level=0 → unmuted" closing assertion that the EMA can't satisfy synchronously; the existing comment about `AmplitudeSmoother` decaying on wall-clock time predicted exactly this. Removed the assertion (the gate-close path is covered by `AmplitudeGateTests.closesAtExit`).
+
+---
+
+## Earlier — Cat-themed Symbol pack + tray/Settings redesign (2026-05-06)
 
 User accepted Symbol pack but wants the symbols to feel like **Mewt the cat app** + the popover/Settings copy refreshed to modern Apple style. Three stages — Stage 1 first, check in before Stage 2.
 
 ### Stage 1 — Cat-themed composite SF Symbols ✅
-SF Symbols only ships 4 cat variants (`cat`, `cat.fill`, `cat.circle`, `cat.circle.fill`) — not enough for 5 unique states. Use composite pattern (Apple Mail/Messages badge style): `cat.fill` as identity + small state badge bottom-right.
+SF Symbols only ships 4 cat variants (`cat`, `cat.fill`, `cat.circle`, `cat.circle.fill`) — not enough for the unique states we needed. Use composite pattern (Apple Mail/Messages badge style): `cat.fill` as identity + small state badge bottom-right.
 
-- [x] Refactored `SymbolPackSource.symbolDescriptor` → main + optional badge + colors per state. Per-state badges: muted=zzz, talking=waveform, talkingWhileMuted=alarm triangle (red), pushToTalk=radio waves (accent), unmuted=none.
+- [x] Refactored `SymbolPackSource.symbolDescriptor` → main + optional badge + colors per state. Per-state badges: muted=zzz, talking=waveform, pushToTalk=radio waves (accent), unmuted=none. (The `talkingWhileMuted=alarm triangle` mapping was retired in 2026-05-07 with the feature itself.)
 - [x] Render composite per cell — `drawTintedSymbol` helper + `SymbolAnchor.center/.bottomRight` keeps anchoring testable.
 - [x] `MicStatus`: dropped `menuBarSymbol`; added `menuBarMainSymbol` (always cat.fill) + `menuBarBadgeSymbol` (optional state badge).
 - [x] `TrayController.composeMenuBarImage` builds template NSImage stacking main + badge at standard 18pt menu-bar size.
@@ -32,10 +65,10 @@ User swapped to fill-style SVGs with tighter viewBox (rendering looks better) an
 - [x] `MicStatusTests.mutedBadgeIsZzz` → `mutedBadgeIsPawPrint`. Tests 183/183 green.
 
 ### Stage 2 — Tray popover redesign + copy (waiting on Stage 1 sign-off)
-- Hero status card with `.contentTransition(.symbolEffect(.replace))` on mascot/badge
-- Mute button: icon-bearing, color shifts on alarm state (red "I'm Muted!" when talkingWhileMuted)
-- Hotkey hints + Input Level + TalkDetection collapsed to compact footer
-- Copy fixes: "Talking (PTT)" → "Push-to-Talk", "Talk-while-muted Detection" → "Mute leak alarm"
+- Hero status card with `.contentTransition(.symbolEffect(.replace))` on mascot
+- Mute button: icon-bearing
+- Hotkey hints + Input Level collapsed to compact footer
+- Copy fixes: "Talking (PTT)" → "Push-to-Talk"
 
 ### Stage 3 — Settings polish (waiting on Stage 2 sign-off)
 - `Label` + system-icon section headers
@@ -71,9 +104,8 @@ Design choice locked in: **rasterize SF Symbols → NSImage** (drops into existi
 
 ## Backlog of original Phase 4 foundation closing-out (re-runs only when flag flips back on)
 
-- Cycle 5 states against cat pack art
-- Refine PixelLab art (`talkingWhileMuted` panic read)
-- Rerun `scripts/build_default_pack.py` after touch-ups
+- Cycle 4 states against cat pack art
+- Drop `talkingWhileMuted` row from `scripts/build_default_pack.py` `TAG_ORDER` and re-rasterise the cat pack (was a 2026-04-26 panic-read row, now unreferenced after the 2026-05-07 feature retirement)
 
 ---
 
@@ -103,7 +135,6 @@ Headline scope: drag-drop import (`.mewtpet`, Aseprite export, APNG, GIF, single
 
 - **Distinct PTT art** — `pushToTalk` is aliased to `talking` frames in `scripts/build_default_pack.py` (`TAG_ALIASES`). Drop the alias and add a real PTT row to `TAG_ORDER` once unique animation is sourced.
 - **⌥Space PTT key consume** (carry-over from Phase 1) — currently the keystroke still forwards to the focused app. Needs `CGEventTap` + Accessibility permission.
-- **Talk-while-muted alarm on external USB mics** — some USB drivers apply volume scaling pre-tap stage; HAL mute silences the tap. Investigate Aggregate Device routing or `AVCaptureSession` path.
 - **i18n `MicStatus.label`** — English only; deferred per engine spec §12.
 - **@2x sprite variants** — explicitly skipped. Pixel art with `.interpolation(.none)` + integer-snap (engine §4.6) scales correctly without `@2x` PNGs.
 

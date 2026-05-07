@@ -11,9 +11,9 @@ import Foundation
 ///
 /// Each cell composes two symbols: `cat.fill` as identity (large,
 /// centred) plus an optional state badge in the bottom-right corner
-/// (`zzz`, `waveform`, alarm triangle, PTT radio). Mirrors Apple's
-/// Mail/Messages icon badge convention — brand identity is constant,
-/// state cue rides on a small affordance.
+/// (`zzz`, `waveform`, PTT radio). Mirrors Apple's Mail/Messages icon
+/// badge convention — brand identity is constant, state cue rides on
+/// a small affordance.
 ///
 /// Why bake symbols into a bitmap rather than reach for native
 /// `.symbolEffect`/`Image(systemName:)`? Two render paths means two
@@ -22,9 +22,9 @@ import Foundation
 ///
 /// `tintPolicy` is set to `.none` so `PoseRenderer` skips the muted
 /// desaturation (no-op on monochrome icons) and the programmatic
-/// `EffectOverlay` (`zzz`, alarm triangle, PTT glow) — the badge in
-/// the composite already conveys the same affordances, baked into
-/// the sheet at the correct anchor.
+/// `EffectOverlay` (`zzz`, PTT glow) — the badge in the composite
+/// already conveys the same affordances, baked into the sheet at the
+/// correct anchor.
 struct SymbolPackSource: PackSource {
   static let packId = "com.chaninlaw.mewt.symbol"
 
@@ -209,11 +209,6 @@ struct SymbolPackSource: PackSource {
       return .init(
         main: "cat.fill", mainColor: .labelColor,
         badge: "waveform", badgeColor: .controlAccentColor
-      )
-    case .talkingWhileMuted:
-      return .init(
-        main: "cat.fill", mainColor: .systemRed,
-        badge: "exclamationmark.triangle.fill", badgeColor: .systemRed
       )
     case .pushToTalk:
       return .init(

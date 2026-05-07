@@ -159,7 +159,25 @@
 
 ---
 
+### Apple-side privacy enforcement ปิดทาง talk-while-muted detection (macOS 26.4.1, 2026-05-07)
+
+- **Trigger:** ออกแบบ feature ที่ depend บน "ฟัง mic ตอน mute เพื่อแจ้งผู้ใช้" บน macOS รุ่นใหม่
+- **Empirical finding (2026-05-07):** macOS 26.4 → 26.4.1 dot release ทำให้ `kAudioDevicePropertyMute = 1` silence AVAudioEngine tap ของ process ตัวเองด้วย — ไม่ใช่แค่ client app อื่น. ก่อน 26.4.1 บน wired devices บาง USB driver ยอมให้ tap อ่าน raw signal ผ่าน HAL mute ได้, ตอน 26.4.1 ปิดทุก path พร้อมกัน
+- **Verification:** Phase 3 (commit `0c0f30e`, 2026-04-26) verify ทำงานบน wired USB. ก่อน 2026-05-07 user re-test = ไม่ทำงาน. `git diff 0c0f30e..HEAD` บน `MicMuteController.mute()`, `AudioLevelMonitor`, `TalkingDebouncer`, `AppState.isTalkingWhileMuted` = identical behaviour → environmental change, ไม่ใช่ regression
+- **Rule:** **ห้าม design feature ใหม่ที่ assume HAL mute ไม่ silence own tap** บน macOS modern. ทุก dot release มีโอกาสปิด loophole
+- **Decision pattern:** เมื่อ feature เจอ environmental change ที่ปิด architectural escape — ตัดสินใจ kill เร็ว ดีกว่า hide ผ่าน flag (เก็บ tech debt) หรือคง UI ที่หลอกผู้ใช้ว่า feature ทำงานอยู่. cost ของ kill น้อยกว่า cost ของ "feature ที่อยู่แต่ไม่ทำงาน" ทั้งใน support burden + UX confusion
+- **Workaround paths ที่ยังเหลือ (สำหรับ future-self ที่จะกลับมาทำ):**
+  1. Aggregate Device routing — สร้าง virtual device ผ่าน CoreAudio, route real mic → processing → exposed device. Cost: ระดับ Loopback / BlackHole, ต้อง user permission
+  2. AVCaptureSession path — separate capture infrastructure, อาจ bypass HAL mute. Untested
+  3. Pre-mute amplitude window — เก็บ history ก่อน mute, fire alert ถ้าเริ่มพูดในจังหวะ mute (semantic ต่างจาก "พูด *ตอน* muted")
+- **How to apply:** ก่อน rely บน HAL low-level behaviour ใน macOS app — verify บน macOS รุ่นล่าสุดเสมอ + ระบุ "macOS X.Y verified" ใน comment / spec. ถ้าไม่ verify ทุก dot release ก็มี chance ที่ behaviour silently flip
+
+---
+
 ### Hybrid mute strategy: Bluetooth ต้อง HAL mute + volume=0; wired ใช้ HAL mute เท่านั้น (volume คงเดิม)
+
+**Status (2026-05-07):** บทเรียนนี้ยังคงใช้ guidance เรื่อง mute strategy ได้, แต่ "wired = mute=1 only เพื่อ talk-while-muted detection" ส่วนนี้ obsolete แล้ว — feature ถูก retire ใน 2026-05-07 (ดูบทเรียน "Apple-side privacy enforcement" ด้านบน). Wired branch ยังใช้ `mute=1` only เพราะเหตุผลเดิม (volume=0 silence tap บน USB หลายตัว — ไม่ดีต่อ amplitude monitoring ที่ขับ mascot animation), แค่ "talk-while-muted alarm" ไม่อยู่แล้ว
+
 
 - **Trigger:** macOS app ที่ทั้ง mute ไมค์ system-wide **และ** monitor input level (เช่น talk-while-muted detection)
 - **Empirical finding (2026-04-26 user verify):** บน external USB device, การตั้ง `volume=0` silence **ทั้ง** client ของแอพอื่น **และ** AVAudioEngine tap ของเราเอง — ขัดกับ Phase 0 comment ที่อ้างว่า engine reads "raw input stream before system-level volume". เห็นได้ว่าบาง USB driver apply volume scaling ที่ stage ก่อน HAL multiplexing ดังนั้น tap ก็โดน scale ไปด้วย

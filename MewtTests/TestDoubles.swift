@@ -38,7 +38,7 @@ final class MockMuteController: MicMuteControlling {
 
 @MainActor
 final class MockAudioLevelMonitor: AudioLevelMonitoring {
-    var onLevelUpdate: ((Float, Bool) -> Void)?
+    var onLevelUpdate: ((Float) -> Void)?
 
     private(set) var startCallCount = 0
     private(set) var stopCallCount = 0
@@ -53,8 +53,8 @@ final class MockAudioLevelMonitor: AudioLevelMonitoring {
         stopCallCount += 1
     }
 
-    func simulateLevel(_ level: Float, isTalking: Bool) {
-        onLevelUpdate?(level, isTalking)
+    func simulateLevel(_ level: Float) {
+        onLevelUpdate?(level)
     }
 }
 

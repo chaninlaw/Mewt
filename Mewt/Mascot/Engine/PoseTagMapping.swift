@@ -6,11 +6,10 @@ import Foundation
 enum PoseTagMapping {
     static func tag(for status: MicStatus) -> PoseTag {
         switch status {
-        case .unmuted:           return .unmuted
-        case .muted:             return .muted
-        case .talking:           return .talking
-        case .talkingWhileMuted: return .talkingWhileMuted
-        case .pushToTalk:        return .pushToTalk
+        case .unmuted:    return .unmuted
+        case .muted:      return .muted
+        case .talking:    return .talking
+        case .pushToTalk: return .pushToTalk
         }
     }
 }

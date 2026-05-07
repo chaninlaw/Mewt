@@ -18,11 +18,6 @@ struct PoseTagMappingTests {
         #expect(PoseTagMapping.tag(for: .talking) == .talking)
     }
 
-    @Test("talkingWhileMuted → .talkingWhileMuted")
-    func talkingWhileMutedMapping() {
-        #expect(PoseTagMapping.tag(for: .talkingWhileMuted) == .talkingWhileMuted)
-    }
-
     @Test("pushToTalk → .pushToTalk")
     func pushToTalkMapping() {
         #expect(PoseTagMapping.tag(for: .pushToTalk) == .pushToTalk)

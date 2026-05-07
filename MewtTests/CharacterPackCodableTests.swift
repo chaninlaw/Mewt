@@ -22,11 +22,10 @@ struct CharacterPackCodableTests {
             tier: .free,
             frames: [frame, frame, frame, frame],
             poses: [
-                .idle:              PoseAnimation(frameRange: 0..<2, loopMode: .forward, fpsMultiplier: 1),
-                .muted:             PoseAnimation(frameRange: 2..<3, loopMode: .freeze,  fpsMultiplier: 1),
-                .unmuted:           PoseAnimation(frameRange: 0..<2, loopMode: .forward, fpsMultiplier: 1),
-                .talkingWhileMuted: PoseAnimation(frameRange: 0..<2, loopMode: .forward, fpsMultiplier: 1),
-                .pushToTalk:        PoseAnimation(frameRange: 3..<4, loopMode: .forward, fpsMultiplier: 1.5)
+                .idle:       PoseAnimation(frameRange: 0..<2, loopMode: .forward, fpsMultiplier: 1),
+                .muted:      PoseAnimation(frameRange: 2..<3, loopMode: .freeze,  fpsMultiplier: 1),
+                .unmuted:    PoseAnimation(frameRange: 0..<2, loopMode: .forward, fpsMultiplier: 1),
+                .pushToTalk: PoseAnimation(frameRange: 3..<4, loopMode: .forward, fpsMultiplier: 1.5)
             ],
             overrides: .default,
             extras: extras

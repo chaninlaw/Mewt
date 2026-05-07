@@ -150,13 +150,8 @@ private struct PoseTintModifier: ViewModifier {
     /// cheap to leave on for non-alarm poses too.
     func body(content: Content) -> some View {
         let saturation: Double = (enabled && pose == .muted) ? 0.7 : 1.0
-        let alarmTint: Color = (enabled && pose == .talkingWhileMuted)
-            ? Color.red.opacity(0.30)
-            : Color.clear
         content
             .saturation(saturation)
-            .compositingGroup()
-            .overlay(alarmTint.blendMode(.sourceAtop))
     }
 }
 
@@ -175,8 +170,6 @@ private struct EffectOverlay: View {
         switch pose {
         case .muted:
             zSymbol
-        case .talkingWhileMuted:
-            alarmSymbol
         case .pushToTalk:
             pttGlow
         default:
@@ -191,20 +184,6 @@ private struct EffectOverlay: View {
             .font(.system(size: canvasSize * 0.22, weight: .semibold))
             .foregroundStyle(.secondary)
             .offset(y: bobbing)
-            .position(
-                x: anchors.accentTopRight.x * canvasSize,
-                y: anchors.accentTopRight.y * canvasSize
-            )
-    }
-
-    private var alarmSymbol: some View {
-        // Triangle bounces in place + small rotation shake.
-        let shake = sin(timestamp * .pi * 2 / 0.4) * 6  // ±6°, 0.4s period
-        return Image(systemName: "exclamationmark.triangle.fill")
-            .font(.system(size: canvasSize * 0.22, weight: .bold))
-            .foregroundStyle(.red)
-            .symbolEffect(.bounce, options: .repeating, value: Int(timestamp * 2.5))
-            .rotationEffect(.degrees(shake))
             .position(
                 x: anchors.accentTopRight.x * canvasSize,
                 y: anchors.accentTopRight.y * canvasSize

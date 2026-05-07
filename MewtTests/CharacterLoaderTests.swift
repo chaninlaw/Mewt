@@ -29,7 +29,7 @@ struct CharacterLoaderTests {
         #expect(abs(loaded.pack.frames[0].duration - 0.1) < 0.0001)
     }
 
-    @Test("All four PoseTag-named tags resolve to the declared frame ranges")
+    @Test("PoseTag-named tags resolve to the declared frame ranges")
     func tagsBuildPoseAnimations() throws {
         let bundle = try MewtpetFixtures.makeValidMinimal()
         defer { MewtpetFixtures.cleanup(bundle) }
@@ -37,7 +37,6 @@ struct CharacterLoaderTests {
         let loaded = try CharacterLoader.load(bundleURL: bundle)
         #expect(loaded.pack.poses[.idle]?.frameRange == 0..<6)
         #expect(loaded.pack.poses[.muted]?.frameRange == 6..<7)
-        #expect(loaded.pack.poses[.talkingWhileMuted]?.frameRange == 7..<11)
         #expect(loaded.pack.poses[.pushToTalk]?.frameRange == 11..<15)
     }
 
@@ -98,24 +97,6 @@ struct CharacterLoaderTests {
         let muted = try #require(loaded.pack.poses[.muted])
         #expect(muted.frameRange == 2..<3)
         #expect(muted.loopMode == .freeze)
-    }
-
-    @Test("Missing talkingWhileMuted falls back to unmuted (NOT muted)")
-    func talkingWhileMutedSkipsMutedFallback() throws {
-        // Pack with idle + muted but no unmuted, no talkingWhileMuted.
-        // Fallback chain: talkingWhileMuted → unmuted (resolved to idle), NOT muted.
-        let bundle = try MewtpetFixtures.makeValidMinimal(
-            tagSpec: [
-                ("idle",  0, 5, "forward"),
-                ("muted", 6, 6, "forward")
-            ]
-        )
-        defer { MewtpetFixtures.cleanup(bundle) }
-
-        let loaded = try CharacterLoader.load(bundleURL: bundle)
-        let twm = try #require(loaded.pack.poses[.talkingWhileMuted])
-        // Should be 0..<6 (idle's range), not 6..<7 (muted's range)
-        #expect(twm.frameRange == 0..<6)
     }
 
     @Test("Missing pushToTalk falls back to unmuted/idle")

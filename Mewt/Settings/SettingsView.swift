@@ -26,21 +26,6 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-
-            Section("Talk-while-muted Detection") {
-                HStack(spacing: 6) {
-                    Image(systemName: appState.talkDetection.isActive ? "ear.fill" : "ear.slash")
-                        .foregroundStyle(appState.talkDetection.isActive ? Color.green : Color.secondary)
-                    Text(appState.talkDetection.label).bold()
-                    Spacer()
-                }
-                Text(appState.talkDetection.helpText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text("Why? Bluetooth mics ignore software volume, so we have to use HAL-level mute on them — which also silences Mewt's own listener. Wired mics (built-in / USB) silence other apps without silencing the listener, so detection works.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
         }
         .formStyle(.grouped)
         .frame(width: 460, height: 540)

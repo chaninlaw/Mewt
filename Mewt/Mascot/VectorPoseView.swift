@@ -4,10 +4,9 @@ import SwiftUI
 /// `unmuted` is the bare cat; `muted` swaps to a bare `paw-print`;
 /// `talking` and `pushToTalk` share the `talk-1` … `talk-12` cycle
 /// (wavy gap moving up the cat) — PTT differentiates by accent
-/// tint instead of a separate frame set. `talkingWhileMuted`
-/// overlays an alarm triangle. Sprite-driven packs keep the engine
-/// via `PoseRenderer`; dispatch happens at the call site in
-/// `MascotView`.
+/// tint instead of a separate frame set. Sprite-driven packs keep
+/// the engine via `PoseRenderer`; dispatch happens at the call
+/// site in `MascotView`.
 struct VectorPoseView: View {
     let status: MicStatus
     var size: CGFloat = 64
@@ -62,34 +61,13 @@ struct VectorPoseView: View {
             .aspectRatio(contentMode: .fit)
             .foregroundStyle(catColor)
             .frame(width: size, height: size)
-            .overlay(alignment: .bottomTrailing) {
-                badge
-                    .padding(size * 0.04)
-            }
     }
 
     private var catColor: Color {
         switch status {
         case .unmuted, .talking:  .primary
         case .muted:              .secondary
-        case .talkingWhileMuted:  .red
         case .pushToTalk:         .accentColor
-        }
-    }
-
-    @ViewBuilder
-    private var badge: some View {
-        let bs = size * 0.32
-        switch status {
-        case .unmuted, .muted, .talking, .pushToTalk:
-            // Each of these states carries its full signal in the
-            // main glyph (bare cat / bare paw / animation cycle), so
-            // there is nothing to overlay.
-            EmptyView()
-        case .talkingWhileMuted:
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: bs, weight: .bold))
-                .foregroundStyle(.red)
         }
     }
 }

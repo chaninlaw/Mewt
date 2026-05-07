@@ -10,7 +10,6 @@ enum PoseTag: String, Equatable, Sendable, Codable, CaseIterable, CodingKeyRepre
     case muted
     case unmuted
     case talking
-    case talkingWhileMuted
     case pushToTalk
 }
 

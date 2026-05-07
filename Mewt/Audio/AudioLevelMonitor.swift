@@ -4,7 +4,7 @@ import os
 
 @MainActor
 protocol AudioLevelMonitoring: AnyObject {
-    var onLevelUpdate: ((Float, Bool) -> Void)? { get set }
+    var onLevelUpdate: ((Float) -> Void)? { get set }
     func start() throws
     func stop()
 }
@@ -29,8 +29,8 @@ enum AudioLevelMonitorError: Error {
 }
 
 /// Taps the system input node to measure RMS amplitude. Drives the
-/// talk-while-muted alarm when the underlying device permits it (see
-/// `TalkDetectionStatus` for the per-transport-type semantics).
+/// mascot's amplitude-based reactions (`isTalkingNow` gate, smoothed
+/// amplitude for variable-fps animation).
 ///
 /// **Lifecycle:** a single `AVAudioEngine` instance lives for the whole
 /// process. We *don't* recreate it across `stop()` / `start()` because
@@ -46,11 +46,8 @@ final class AudioLevelMonitor: AudioLevelMonitoring {
     private var running = false
     private var configChangeObserver: NSObjectProtocol?
 
-    /// Callback fires on the main queue. First arg is instantaneous level (0...1),
-    /// second arg is a debounced "isTalking" boolean.
-    var onLevelUpdate: ((Float, Bool) -> Void)?
-
-    private var debouncer = TalkingDebouncer()
+    /// Callback fires on the main queue with the instantaneous level (0...1).
+    var onLevelUpdate: ((Float) -> Void)?
 
     init() {
         // Subscribe once at init: AVAudioEngine fires this when its
@@ -182,17 +179,14 @@ final class AudioLevelMonitor: AudioLevelMonitoring {
         let total = Float(frameLength * channelCount)
         let rms = (total > 0) ? sqrt(sumSquares / total) : 0
         let level = min(1.0, rms * 4)
-        let now = Date()
 
-        // The tap fires on AVAudioEngine's I/O thread. `debouncer` and
-        // `onLevelUpdate` are actor-isolated state, so hop to main
-        // before touching them — accessing isolated state from the I/O
-        // thread is undefined behaviour and was a likely source of the
-        // EXC_BAD_ACCESS we saw on device switches.
+        // The tap fires on AVAudioEngine's I/O thread. `onLevelUpdate`
+        // is actor-isolated state, so hop to main before invoking it —
+        // accessing isolated state from the I/O thread is undefined
+        // behaviour and was a likely source of the EXC_BAD_ACCESS we
+        // saw on device switches.
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            let isTalking = self.debouncer.observe(rms: rms, now: now)
-            self.onLevelUpdate?(level, isTalking)
+            self?.onLevelUpdate?(level)
         }
     }
 }

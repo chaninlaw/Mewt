@@ -8,13 +8,13 @@ import Foundation
 /// Each call returns a URL pointing at the bundle root; the caller is
 /// expected to clean up via `cleanup(_:)`.
 enum MewtpetFixtures {
-    /// Tag spec used by the default sprite.json. Mirrors §7.1 of the
-    /// design spec: 6 idle / 1 muted / 4 talkingWhileMuted / 4 pushToTalk = 15 frames.
+    /// Tag spec used by the default sprite.json. 6 idle / 1 muted / 4
+    /// (unused span, kept so frame indices stay stable across test
+    /// fixtures) / 4 pushToTalk = 15 frames.
     static let defaultTagSpec: [(name: String, from: Int, to: Int, direction: String)] = [
-        ("idle",              0,  5,  "forward"),
-        ("muted",             6,  6,  "forward"),
-        ("talkingWhileMuted", 7,  10, "forward"),
-        ("pushToTalk",        11, 14, "forward")
+        ("idle",       0,  5,  "forward"),
+        ("muted",      6,  6,  "forward"),
+        ("pushToTalk", 11, 14, "forward")
     ]
 
     static func makeValidMinimal(

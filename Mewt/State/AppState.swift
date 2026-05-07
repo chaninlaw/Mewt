@@ -7,7 +7,6 @@ import os
 @MainActor
 final class AppState {
     var inputLevel: Float = 0
-    var isSpeechDetected: Bool = false
     var statusMessage: String = ""
 
     /// Smoothed mic amplitude (EMA ~100 ms) consumed by `PoseRenderer`
@@ -16,17 +15,8 @@ final class AppState {
     var smoothedAmplitude: Double = 0
 
     /// Whether smoothed amplitude is currently above the talking-gate
-    /// threshold. Drives `MicStatus.talking` while unmuted. Distinct
-    /// from `isSpeechDetected` (the VAD): this one is amplitude-based
-    /// with hysteresis, used for friendly visual reaction; that one is
-    /// the alarm trigger for `talkingWhileMuted`.
+    /// threshold. Drives `MicStatus.talking` while unmuted.
     var isTalkingNow: Bool = false
-
-    /// Whether (and why) the talk-while-muted alarm can fire. Updated
-    /// at `start()` and again whenever the default input device
-    /// changes — the user might switch between built-in and AirPods
-    /// mid-meeting.
-    var talkDetection: TalkDetectionStatus = .unavailable
 
     /// Source of mascot packs + current selection. Constructed in
     /// `init` and immutable thereafter.
@@ -41,7 +31,6 @@ final class AppState {
 
     var isMuted: Bool { muteState.physicalMuted }
     var pttActive: Bool { muteState.pttActive }
-    var isTalkingWhileMuted: Bool { muteState.physicalMuted && isSpeechDetected }
 
     var status: MicStatus {
         // PTT pose only fires when PTT actually overrides a muted state.
@@ -50,7 +39,6 @@ final class AppState {
         // talking/unmuted display instead of flashing a misleading "PTT"
         // indicator on every keypress.
         if muteState.pttActive && muteState.targetMuted { return .pushToTalk }
-        if isTalkingWhileMuted { return .talkingWhileMuted }
         if muteState.physicalMuted { return .muted }
         if isTalkingNow { return .talking }
         return .unmuted
@@ -147,55 +135,24 @@ final class AppState {
         hotkeys.start()
     }
 
-    /// Starts (or restarts) the input tap and refreshes
-    /// `talkDetection` to reflect the current default device. Called
-    /// at `start()` and again whenever the default device changes —
-    /// AVAudioEngine binds the input node at start time and doesn't
-    /// follow default-device changes on its own.
+    /// Starts (or restarts) the input tap. Called at `start()` and
+    /// again whenever the default device changes — AVAudioEngine binds
+    /// the input node at start time and doesn't follow default-device
+    /// changes on its own.
     private func startLevelMonitor() {
         levelMonitor.stop()
         do {
             try levelMonitor.start()
-            talkDetection = Self.talkDetectionStatus(for: muteController.defaultInputTransport())
         } catch AudioLevelMonitorError.noInputDevice {
-            talkDetection = .unavailable
             statusMessage = "No microphone detected"
         } catch AudioLevelMonitorError.permissionDenied {
-            talkDetection = .permissionDenied
             statusMessage = "Mic permission needed"
         } catch AudioLevelMonitorError.engineStartFailed(let underlying) {
-            // Engine couldn't start for a non-permission reason
-            // (resource busy, format mismatch on the rebound, audio
-            // service crashed). Talk detection stays off until the
-            // user does something that triggers a config change
-            // (replug, switch device).
             log.error("Level monitor engine start failed: \(underlying.localizedDescription, privacy: .public)")
-            talkDetection = .unavailable
             statusMessage = "Mic listener unavailable"
         } catch {
-            // Defensive — current AudioLevelMonitor only throws the
-            // three cases above, but keep the catch-all so future
-            // additions don't silently drop into a misleading state.
             log.error("Level monitor failed: \(error.localizedDescription, privacy: .public)")
-            talkDetection = .unavailable
             statusMessage = "Mic listener unavailable"
-        }
-    }
-
-    /// Pure mapping from a CoreAudio transport snapshot to the UI-level
-    /// `TalkDetectionStatus`. Centralising it here keeps
-    /// `startLevelMonitor` and `refreshTalkDetectionOnly` from drifting
-    /// out of sync.
-    private static func talkDetectionStatus(
-        for transport: DefaultInputTransport
-    ) -> TalkDetectionStatus {
-        switch transport {
-        case .wired:
-            return .active
-        case .bluetooth(let name):
-            return .disabledByBluetooth(deviceName: name)
-        case .absent:
-            return .unavailable
         }
     }
 
@@ -203,7 +160,6 @@ final class AppState {
         muteController.onDefaultDeviceChanged = { [weak self] in
             guard let self else { return }
             self.applyMuteState(revertOnFailure: false)
-            self.refreshTalkDetectionOnly()
             // Reset audio-derived state so the post-swap device starts
             // from a clean baseline. Without this, an in-flight EMA /
             // open gate from the old device persists across the swap
@@ -214,7 +170,6 @@ final class AppState {
             self.amplitudeGate.reset()
             self.smoothedAmplitude = 0
             self.isTalkingNow = false
-            self.isSpeechDetected = false
             self.inputLevel = 0
             self.statusMessage = "Input device changed"
             // Belt-and-suspenders restart of the level monitor.
@@ -235,10 +190,9 @@ final class AppState {
                 self?.startLevelMonitor()
             }
         }
-        levelMonitor.onLevelUpdate = { [weak self] level, isTalking in
+        levelMonitor.onLevelUpdate = { [weak self] level in
             guard let self else { return }
             self.inputLevel = level
-            self.isSpeechDetected = isTalking
             self.amplitudeSmoother.update(Double(level))
             self.smoothedAmplitude = self.amplitudeSmoother.value
             self.isTalkingNow = self.amplitudeGate.update(amplitude: self.smoothedAmplitude)
@@ -246,19 +200,6 @@ final class AppState {
         hotkeys.onToggle = { [weak self] in self?.toggleMute() }
         hotkeys.onPTTDown = { [weak self] in self?.pttDown() }
         hotkeys.onPTTUp = { [weak self] in self?.pttUp() }
-    }
-
-    /// Tests run under the XCTest guard, so they can't go through
-    /// `startLevelMonitor()` (which would touch a real engine). This
-    /// path lets device-change tests still verify that `talkDetection`
-    /// updates correctly.
-    private func refreshTalkDetectionOnly() {
-        // Don't clobber `permissionDenied` — that's a sticky state that
-        // only changes when the user grants access in System Settings,
-        // which fires its own re-launch path. A device hot-plug doesn't
-        // reset it.
-        if talkDetection == .permissionDenied { return }
-        talkDetection = Self.talkDetectionStatus(for: muteController.defaultInputTransport())
     }
 
     func toggleMute() {

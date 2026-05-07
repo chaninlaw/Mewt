@@ -147,9 +147,7 @@ final class TrayController {
             accessibilityDescription: status.label
         )
         image?.isTemplate = true
-        // Tint alarm state red so the user spots talking-while-muted at
-        // a glance from across the screen.
-        button.contentTintColor = (status == .talkingWhileMuted) ? .systemRed : nil
+        button.contentTintColor = nil
         button.image = image
     }
 

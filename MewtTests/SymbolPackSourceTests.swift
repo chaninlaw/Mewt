@@ -87,11 +87,10 @@ struct SymbolPackSourceTests {
         #expect(r.spriteImage.size.height == 64)
     }
 
-    /// Catches the failure mode the user hit on 2026-05-06 where
-    /// `talkingWhileMuted` rendered as a fully transparent cell — a
-    /// silent-fail in symbol synthesis. Every cell must have a
-    /// noticeable cluster of opaque pixels (>5% of cell area) for the
-    /// composite to be visually present.
+    /// Catches silent-fail symbol-synthesis failure modes (one cell
+    /// rendering as a fully transparent rect on macOS 26). Every cell
+    /// must have a noticeable cluster of opaque pixels (>5% of cell
+    /// area) for the composite to be visually present.
     @Test @MainActor
     func everyCellHasOpaquePixels() throws {
         let source = SymbolPackSource()
