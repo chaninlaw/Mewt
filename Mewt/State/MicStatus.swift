@@ -33,13 +33,27 @@ extension MicStatus {
         }
     }
 
-    var menuBarSymbol: String {
+    /// Asset-catalog image name (not an SF Symbol) for the menu-bar
+    /// status item. Cat glyph by default; muted swaps to a bare
+    /// `paw-print` because a sleeping/quiet paw reads more clearly
+    /// than a cat-with-paw-badge at 18pt menu-bar size.
+    var menuBarMainSymbol: String {
         switch self {
-        case .unmuted:             "mic.fill"
-        case .muted:               "mic.slash.fill"
-        case .talking:             "waveform"
-        case .talkingWhileMuted:   "exclamationmark.triangle.fill"
-        case .pushToTalk:          "mic.badge.plus"
+        case .muted:  "paw-print"
+        default:      "cat"
+        }
+    }
+
+    /// State-specific badge composited over the main glyph. `nil`
+    /// for any state whose signal is carried entirely by the main
+    /// glyph: `unmuted` (bare cat = all good), `muted` (bare paw),
+    /// `talking` and `pushToTalk` (cycling animation). Names resolve
+    /// as asset-catalog images first then fall back to SF Symbols
+    /// inside `TrayController.composeMenuBarImage`.
+    var menuBarBadgeSymbol: String? {
+        switch self {
+        case .unmuted, .muted, .talking, .pushToTalk:  nil
+        case .talkingWhileMuted:  "exclamationmark.triangle.fill"
         }
     }
 }

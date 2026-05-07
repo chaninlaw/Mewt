@@ -98,21 +98,32 @@ final class AppState {
         wireCallbacks()
     }
 
-    /// Production catalog: tries `BundledPackSource` first, falls back
-    /// to `SafePackSource` so the app still launches with a visible
-    /// mascot when bundled assets are missing or corrupt.
+    /// Production catalog. `SymbolPackSource` is the user-facing
+    /// default (asset-free, always available). `BundledPackSource`
+    /// is dark-launched behind `MewtFeatureFlags.bundledPackEnabled`
+    /// — when on, the cat pack discovered in `Resources/` joins the
+    /// catalog and becomes the default. `SafePackSource` stays
+    /// last-line so the app launches even if every other source
+    /// returned nothing.
     private static func makeProductionCatalog() -> CharacterCatalog {
         var sources: [any PackSource] = []
-        do {
-            sources.append(try BundledPackSource())
-        } catch {
-            Logger(subsystem: "com.chaninlaw.Mewt", category: "MascotEngine")
-                .fault("BundledPackSource init failed: \(String(describing: error), privacy: .public)")
+        var defaultPackId = SymbolPackSource.packId
+
+        if MewtFeatureFlags.bundledPackEnabled {
+            do {
+                sources.append(try BundledPackSource())
+                defaultPackId = "com.chaninlaw.mewt.default"
+            } catch {
+                Logger(subsystem: "com.chaninlaw.Mewt", category: "MascotEngine")
+                    .fault("BundledPackSource init failed: \(String(describing: error), privacy: .public)")
+            }
         }
+        sources.append(SymbolPackSource())
         sources.append(SafePackSource())
+
         return CharacterCatalog(
             sources: sources,
-            defaultPackId: "com.chaninlaw.mewt.default",
+            defaultPackId: defaultPackId,
             selectionStorage: .standard
         )
     }

@@ -8,11 +8,11 @@ struct OverlayContentView: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        PoseRenderer(
-            status: appState.status,
-            amplitude: appState.smoothedAmplitude,
+        MascotView(
             pack: appState.catalog.currentPack(),
             resources: appState.catalog.currentResources(),
+            status: appState.status,
+            amplitude: appState.smoothedAmplitude,
             size: 64
         )
         .padding(16)

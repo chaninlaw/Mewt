@@ -8,11 +8,11 @@ struct ContentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                PoseRenderer(
-                    status: appState.status,
-                    amplitude: appState.smoothedAmplitude,
+                MascotView(
                     pack: appState.catalog.currentPack(),
                     resources: appState.catalog.currentResources(),
+                    status: appState.status,
+                    amplitude: appState.smoothedAmplitude,
                     size: 64
                 )
                 VStack(alignment: .leading, spacing: 2) {

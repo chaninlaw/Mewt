@@ -3,10 +3,28 @@ import Testing
 
 @Suite("MicStatus presentation")
 struct MicStatusTests {
-    @Test("Every case has a distinct menu-bar SF Symbol")
-    func distinctSymbols() {
-        let symbols = Set(MicStatus.allCases.map(\.menuBarSymbol))
-        #expect(symbols.count == MicStatus.allCases.count)
+    @Test("Main menu-bar glyph is cat for every state except muted (paw-print)")
+    func mainSymbolPerState() {
+        for status in MicStatus.allCases {
+            let expected = status == .muted ? "paw-print" : "cat"
+            #expect(status.menuBarMainSymbol == expected,
+                    "expected '\(expected)' for \(status), got \(status.menuBarMainSymbol)")
+        }
+    }
+
+    @Test("Only talkingWhileMuted carries a composited badge — animations and bare glyphs don't")
+    func onlyAlarmHasBadge() {
+        // unmuted (bare cat), muted (bare paw-print), talking and
+        // pushToTalk (cycling animation) all carry their full signal
+        // in the main glyph. talkingWhileMuted is the only state
+        // that needs a separate alarm overlay.
+        for status in MicStatus.allCases {
+            let expected: String? = status == .talkingWhileMuted
+                ? "exclamationmark.triangle.fill"
+                : nil
+            #expect(status.menuBarBadgeSymbol == expected,
+                    "badge mismatch for \(status): got \(String(describing: status.menuBarBadgeSymbol))")
+        }
     }
 
     @Test("Every case has a distinct emoji")
@@ -22,11 +40,13 @@ struct MicStatusTests {
         }
     }
 
-    @Test("talking has dedicated label, emoji, and symbol")
+    @Test("talking has dedicated label and emoji — animation carries the visual signal")
     func talkingPresentation() {
         #expect(MicStatus.talking.label == "Talking")
         #expect(MicStatus.talking.emoji == "😸")
-        #expect(MicStatus.talking.menuBarSymbol == "waveform")
+        // The cycling `talk-1` … `talk-12` frames are the talking
+        // signal, so no separate badge symbol is needed.
+        #expect(MicStatus.talking.menuBarBadgeSymbol == nil)
     }
 
     @Test("talkingWhileMuted label signals alert, not plain 'Muted'")
@@ -34,13 +54,16 @@ struct MicStatusTests {
         #expect(MicStatus.talkingWhileMuted.label != MicStatus.muted.label)
     }
 
-    @Test("pushToTalk uses a mic-with-plus symbol, not slashed")
-    func pushToTalkSymbolIsNotSlashed() {
-        #expect(!MicStatus.pushToTalk.menuBarSymbol.contains("slash"))
+    @Test("muted main glyph is the paw-print asset, no badge")
+    func mutedIsBarePawPrint() {
+        // A bare paw-print reads as "the cat's resting" — clearer at
+        // 18pt than a cat-with-paw-badge composite which crowds itself.
+        #expect(MicStatus.muted.menuBarMainSymbol == "paw-print")
+        #expect(MicStatus.muted.menuBarBadgeSymbol == nil)
     }
 
-    @Test("muted uses a slashed mic symbol")
-    func mutedSymbolIsSlashed() {
-        #expect(MicStatus.muted.menuBarSymbol.contains("slash"))
+    @Test("talkingWhileMuted badge is an alarm triangle")
+    func talkingWhileMutedBadgeIsAlarm() {
+        #expect(MicStatus.talkingWhileMuted.menuBarBadgeSymbol == "exclamationmark.triangle.fill")
     }
 }
