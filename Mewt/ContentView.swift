@@ -44,8 +44,18 @@ private struct MainPage: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Input Level").font(.caption2).foregroundStyle(.secondary)
-                ProgressView(value: Double(appState.inputLevel))
-                    .progressViewStyle(.linear)
+                if appState.inputAvailable {
+                    ProgressView(value: Double(appState.inputLevel))
+                        .progressViewStyle(.linear)
+                } else {
+                    HStack(spacing: 6) {
+                        Image(systemName: "mic.slash")
+                            .imageScale(.small)
+                        Text("No microphone")
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
             }
 
             Divider()

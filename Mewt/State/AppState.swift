@@ -7,6 +7,12 @@ import os
 @MainActor
 final class AppState {
     var inputLevel: Float = 0
+    /// True while the level-monitor tap is bound to a real input device.
+    /// Drives the popover's "No microphone" affordance. Stays true through
+    /// brief device-change windows (so the meter doesn't flicker on every
+    /// hot-plug); only flips false once the retry sequence in
+    /// `scheduleLevelMonitorRestart()` exhausts all attempts.
+    var inputAvailable: Bool = false
     var statusMessage: String = ""
 
     /// Smoothed mic amplitude (EMA ~100 ms) consumed by `PoseRenderer`
@@ -27,6 +33,11 @@ final class AppState {
     private var amplitudeSmoother = AmplitudeSmoother()
     @ObservationIgnored
     private var amplitudeGate = AmplitudeGate()
+    /// In-flight retry sequence kicked off by a device change. Cancelled
+    /// when a fresh device-change callback arrives so rapid swap sequences
+    /// don't pile up overlapping restarts.
+    @ObservationIgnored
+    private var levelRestartTask: Task<Void, Never>?
     private let log = Logger(subsystem: "com.chaninlaw.Mewt", category: "AppState")
 
     var isMuted: Bool { muteState.physicalMuted }
@@ -131,28 +142,127 @@ final class AppState {
     func start() {
         guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
         muteController.startObservingDeviceChange()
-        startLevelMonitor()
+        if !startLevelMonitor() {
+            // Launched with no input device. `startLevelMonitor` returned
+            // false on `noInputDevice` without setting state (since the
+            // retry caller usually owns that path); set it here for the
+            // launch case.
+            inputAvailable = false
+            if statusMessage.isEmpty {
+                statusMessage = "No microphone detected"
+            }
+        }
         hotkeys.start()
     }
 
     /// Starts (or restarts) the input tap. Called at `start()` and
     /// again whenever the default device changes — AVAudioEngine binds
     /// the input node at start time and doesn't follow default-device
-    /// changes on its own.
-    private func startLevelMonitor() {
+    /// changes on its own. Returns `true` on successful tap install.
+    /// `noInputDevice` returns `false` *without* setting `inputAvailable`
+    /// or `statusMessage` so the retry caller can decide whether the
+    /// failure is transient (post-swap, device not enumerated yet) or
+    /// terminal (mic genuinely gone).
+    @discardableResult
+    private func startLevelMonitor() -> Bool {
         levelMonitor.stop()
         do {
             try levelMonitor.start()
+            inputAvailable = true
+            return true
         } catch AudioLevelMonitorError.noInputDevice {
-            statusMessage = "No microphone detected"
+            return false
         } catch AudioLevelMonitorError.permissionDenied {
+            inputAvailable = false
             statusMessage = "Mic permission needed"
+            return false
         } catch AudioLevelMonitorError.engineStartFailed(let underlying) {
+            inputAvailable = false
             log.error("Level monitor engine start failed: \(underlying.localizedDescription, privacy: .public)")
             statusMessage = "Mic listener unavailable"
+            return false
         } catch {
+            inputAvailable = false
             log.error("Level monitor failed: \(error.localizedDescription, privacy: .public)")
             statusMessage = "Mic listener unavailable"
+            return false
+        }
+    }
+
+    /// Restart the level monitor with bounded backoff after a device
+    /// change. CoreAudio's device-list event arrives before AVAudioEngine
+    /// has settled — the input node's format is briefly a zero-channel
+    /// stub on the new device, which throws `noInputDevice`. The retry
+    /// schedule covers the realistic worst cases:
+    ///
+    /// - **Wired hot-swap** (built-in ↔ USB analog): typically ready by
+    ///   300–600 ms.
+    /// - **USB earphone first-connect**: macOS may take 1–2 s for
+    ///   class-compliant driver enumeration on first plug-in.
+    /// - **AirPods / Bluetooth HFP**: BT pairing (1–3 s) plus HFP
+    ///   profile negotiation (1–2 s) frequently pushes total readiness
+    ///   to 4–7 s after the device-list event fires.
+    ///
+    /// Cumulative ~9.6 s. Beyond that we surface "No microphone
+    /// detected" — but `AudioLevelMonitor.handleConfigurationChange`
+    /// also reinstalls the tap on every AVAudio hardware-config change
+    /// regardless of running state, so a device that comes online later
+    /// will still recover via that path. `levelMonitor.onLevelUpdate`
+    /// flips `inputAvailable` back to `true` the moment audio flows.
+    ///
+    /// Cancelling any prior task before scheduling avoids overlapping
+    /// retries when the user rapidly cycles devices. The 300 ms first
+    /// delay gives `AudioLevelMonitor`'s own configuration-change
+    /// observer a head start; if it succeeded our restart is a safe
+    /// no-op-shaped stop+start on the same engine.
+    private func scheduleLevelMonitorRestart() {
+        levelRestartTask?.cancel()
+        levelRestartTask = Task { @MainActor [weak self] in
+            // Phase 1 — bounded backoff while the typical device-swap
+            // sequence is in flight. Cumulative ~9.6 s.
+            let boundedDelaysMs: [UInt64] = [300, 600, 1200, 2500, 5000]
+            for delayMs in boundedDelaysMs {
+                try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
+                if Task.isCancelled { return }
+                guard let self else { return }
+                if self.startLevelMonitor() {
+                    if self.statusMessage == "Input device changed" {
+                        self.statusMessage = ""
+                    }
+                    return
+                }
+            }
+
+            // Phase 2 — bounded retries exhausted. Surface "No microphone"
+            // and drop into a long-tail watchdog. AVAudio's own
+            // configuration-change observer is supposed to re-trigger us
+            // when a slow device finally arrives, but we've seen it skip
+            // BT-then-USB transitions where the engine's internal binding
+            // goes stale (`engine.reset()` in `AudioLevelMonitor.start()`
+            // mitigates but doesn't fully eliminate). Polling every 5 s
+            // is a cheap backstop: each tick is a stop+start on the same
+            // engine, returning quickly with `noInputDevice` while no mic
+            // is present, and recovering as soon as one appears. Cancels
+            // on the next device-change callback (fresh task) or on
+            // `quit()`. The `do { }` block scopes the strong-self binding
+            // to the surface step so the watchdog loop below can re-acquire
+            // weakly each tick (avoids holding `AppState` strongly across
+            // the indefinite-duration polling).
+            do {
+                guard let self else { return }
+                self.inputAvailable = false
+                self.statusMessage = "No microphone detected"
+            }
+
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                if Task.isCancelled { return }
+                guard let self else { return }
+                if self.startLevelMonitor() {
+                    self.statusMessage = ""
+                    return
+                }
+            }
         }
     }
 
@@ -172,26 +282,23 @@ final class AppState {
             self.isTalkingNow = false
             self.inputLevel = 0
             self.statusMessage = "Input device changed"
-            // Belt-and-suspenders restart of the level monitor.
-            // Normally `AudioLevelMonitor` reinstalls its tap from its
-            // own `AVAudioEngineConfigurationChange` observer; on some
-            // unplug/replug sequences that notification doesn't fire
-            // (or `try start()` fails silently because the new device
-            // wasn't ready), leaving the tap bound to a now-absent
-            // device and the mascot stuck. The 300 ms delay gives the
-            // engine's own observer the first shot — by the time we
-            // run, either it succeeded (our `stop()+start()` is a
-            // safe no-op-shaped restart on the same engine) or it
-            // didn't (we recover). Recreating the engine itself was
-            // the unsafe path that caused EXC_BAD_ACCESS in lessons.md;
-            // stop+start on the same engine is fine.
-            Task { @MainActor [weak self] in
-                try? await Task.sleep(nanoseconds: 300_000_000)
-                self?.startLevelMonitor()
-            }
+            self.scheduleLevelMonitorRestart()
         }
         levelMonitor.onLevelUpdate = { [weak self] level in
             guard let self else { return }
+            // Audio flowing = a tap is bound to a real device, regardless
+            // of which path got us there (initial start, scheduled retry,
+            // or `AudioLevelMonitor`'s own config-change observer reviving
+            // a stalled engine). This is the canonical "input is live"
+            // signal — flipping `inputAvailable` here recovers from any
+            // stuck "No microphone" state without a separate notification.
+            if !self.inputAvailable {
+                self.inputAvailable = true
+                if self.statusMessage == "No microphone detected"
+                    || self.statusMessage == "Input device changed" {
+                    self.statusMessage = ""
+                }
+            }
             self.inputLevel = level
             self.amplitudeSmoother.update(Double(level))
             self.smoothedAmplitude = self.amplitudeSmoother.value
@@ -246,6 +353,7 @@ final class AppState {
     }
 
     func quit() {
+        levelRestartTask?.cancel()
         levelMonitor.stop()
         muteController.unmute()
         NSApplication.shared.terminate(nil)

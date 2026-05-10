@@ -84,6 +84,33 @@ User swapped to fill-style SVGs with tighter viewBox (rendering looks better) an
 - Replace verbose paragraphs with help popovers (`?`)
 - Decide single Form vs tabs
 
+### Q1 — Input Level reliability across device changes ✅ (2026-05-09)
+
+User reported that swapping mic devices (no mic → AirPods, AirPods → wired USB) didn't refresh the popover's Input Level meter promptly. Three rounds of fixes layered on the existing `AVAudioEngineConfigurationChange` + CoreAudio default-device listeners:
+
+- [x] **`AudioLevelMonitor.start()`** — call `engine.reset()` before reading `inputFormat(forBus:)`. After AirPods-disconnect → USB-connect, the input node could stay bound to the previous device's format, returning zero channels even when CoreAudio sees the new device live. `engine.reset()` clears node-level state so the next `inputFormat` query re-resolves against the current default. Safe on a stopped engine; does **not** recreate the engine instance (per the EXC_BAD_ACCESS lesson on engine recreation).
+- [x] **`AudioLevelMonitor.handleConfigurationChange`** — drop the `guard running else { return }`. The post-launch path "no mic at start → AirPods connect later" depends on the configuration-change notification firing for an engine that never successfully started; guarding on `running` silently skipped recovery. `removeTap` and `engine.stop()` are no-ops when nothing is bound, and `start()` early-returns when already running, so the unguarded path is safe.
+- [x] **`AppState` — canonical "audio is live" signal** — `inputAvailable` (new `@Observable Bool`) flips to `true` inside the `onLevelUpdate` callback (the moment audio actually flows), not when `start()` returns. Covers the slow-USB / Bluetooth-HFP case where `engine.start()` succeeds but the first buffer arrives 1–4s later.
+- [x] **`AppState.scheduleLevelMonitorRestart`** — two-phase retry replaces the old single bounded backoff:
+  - **Phase 1** — bounded backoff `[300, 600, 1200, 2500, 5000] ms`. Covers fast device swaps + slower BT/USB driver init. On success, clears the "Input device changed" status message.
+  - **Phase 2** — long-tail watchdog polling every 5 s, indefinitely (until cancelled or success). Runs after Phase 1 exhausts. Sets `inputAvailable = false` + `statusMessage = "No microphone detected"` to surface the gap honestly while polling continues. Weak-self each tick to avoid a permanent retain.
+- [x] **UI — `ContentView`** — when `!appState.inputAvailable`, swap the ProgressView for an inline "No microphone" cue (`mic.slash` + caption2 secondary). The hero card and mute button stay functional regardless.
+- [x] **Cancellation hygiene** — `quit()` cancels `levelRestartTask`. Restart task is `@ObservationIgnored` so it doesn't trigger spurious view updates.
+- [x] `xcodebuild build` + `xcodebuild test` green — 154/154 pass.
+
+#### Manual verification (2026-05-09)
+
+- No mic at launch → AirPods connect: input level appears within ~1 s of audio engaging. ✅
+- AirPods → USB swap: USB recognized; bounded backoff or watchdog picks it up; meter updates. ✅
+- Mic removed mid-session: meter shows "No microphone" inline, hero card + mute button still respond. ✅
+
+#### Review (2026-05-09)
+
+- Watchdog + `engine.reset()` + onLevelUpdate-driven `inputAvailable` are the three load-bearing pieces. Removing any one re-introduces a regression on a different transport / timing combination.
+- Phase 2 watchdog is intentionally indefinite — it costs ~one CoreAudio probe every 5 s and only runs when no mic is detected. Cheap insurance that prevents the popover ever getting stuck in a stale "no microphone" state if the user plugs something in 30 s later without triggering a config-change notification.
+- The `inputAvailable` signal is observable, so the popover's no-mic UI is reactive without any imperative refresh from the audio path.
+- No new tests; the failure modes are all timing-dependent on real CoreAudio + BT/USB drivers, which mocks can't reproduce. Manual verification across the three transport scenarios is the contract.
+
 ### Stage 2.5 — In-popover Settings + dark-launch overlay ✅ (2026-05-07)
 
 User decided floating mascot is clutter (menu-bar icon already conveys mute), and Settings should live inside the popover so the separate Settings window goes away. Settings reduced to ~3 rows after dropping the mascot toggle, so a state-based page swap is enough — no `NavigationStack` chrome needed.

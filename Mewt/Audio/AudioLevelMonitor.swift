@@ -93,6 +93,17 @@ final class AudioLevelMonitor: AudioLevelMonitoring {
             break
         }
 
+        // Refresh the engine's view of its input device. After a hardware
+        // sequence like AirPods-disconnect → USB-connect, the input node
+        // can stay bound to the previous device's format and
+        // `inputFormat(forBus: 0)` then reports zero channels even when
+        // CoreAudio sees the new device live. `reset()` clears node-level
+        // state so the next `inputFormat` query re-resolves against the
+        // current default device. Safe on a stopped engine; does not
+        // recreate the engine instance (per the EXC_BAD_ACCESS lesson on
+        // engine recreation in `tasks/lessons.md`).
+        engine.reset()
+
         let input = engine.inputNode
         // `inputFormat(forBus:0)` reflects the actual hardware format. If
         // no default input device is connected (no mic, no AirPods), the
@@ -139,13 +150,15 @@ final class AudioLevelMonitor: AudioLevelMonitoring {
         running = false
     }
 
-    /// Restart the tap so it picks up the new format / device. We call
-    /// this from `AVAudioEngineConfigurationChange` instead of from
-    /// `AppState.onDefaultDeviceChanged` so the engine itself decides
-    /// when a reconfigure is required — avoids torching the engine on
-    /// device changes that don't actually affect format.
+    /// Restart the tap so it picks up the new format / device. Called from
+    /// `AVAudioEngineConfigurationChange`. Runs whether or not the engine
+    /// is currently running: the post-launch path "no mic at start →
+    /// AirPods connect later" depends on this notification firing for an
+    /// engine that never successfully started, so guarding on `running`
+    /// would silently skip the recovery. `removeTap` and `engine.stop()`
+    /// are no-ops when nothing is bound, and `start()` itself early-returns
+    /// when `running` is already true, so the unguarded path is safe.
     private func handleConfigurationChange() {
-        guard running else { return }
         log.info("Engine configuration changed; reinstalling tap")
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
@@ -153,9 +166,9 @@ final class AudioLevelMonitor: AudioLevelMonitoring {
         do {
             try start()
         } catch AudioLevelMonitorError.noInputDevice {
-            // Default input was yanked out from under us; nothing to
-            // do — `AppState.refreshTalkDetectionOnly` will pick this
-            // up via the device-change listener.
+            // No input on this config-change tick; AppState's CoreAudio
+            // device-list listener owns the longer-tail retry sequence
+            // (`scheduleLevelMonitorRestart`).
             log.info("Skipping tap restart: no input device after config change")
         } catch {
             log.error("Failed to restart engine after config change: \(error.localizedDescription, privacy: .public)")
