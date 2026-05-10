@@ -12,11 +12,14 @@ struct MewtApp: App {
     @State private var appState = AppState()
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
+    /// Settings UI lives inside the popover (`ContentView` page swap).
+    /// The `Settings` scene is kept as an `EmptyView` stub so SwiftUI's
+    /// `App` protocol has a scene to attach to and `.accessory` apps
+    /// don't lose their entry point if the user ever triggers the
+    /// system-wide ⌘, accelerator. Nothing in our UI calls
+    /// `openSettings()` anymore.
     var body: some Scene {
-        Settings {
-            SettingsView()
-                .environment(appState)
-        }
+        Settings { EmptyView() }
     }
 
     init() {
@@ -60,9 +63,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tray.install()
         self.tray = tray
 
-        let overlay = OverlayWindowController(appState: state)
-        overlay.install()
-        self.overlay = overlay
+        if MewtFeatureFlags.overlayEnabled {
+            let overlay = OverlayWindowController(appState: state)
+            overlay.install()
+            self.overlay = overlay
+        }
 
         // Menu-bar app: no Dock icon, no main window — the popover is the UI.
         NSApp.setActivationPolicy(.accessory)

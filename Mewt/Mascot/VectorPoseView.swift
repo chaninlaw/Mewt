@@ -26,6 +26,9 @@ struct VectorPoseView: View {
                 composition(mainName: mainAssetName)
             }
         }
+        .id(status)
+        .transition(.opacity.combined(with: .scale(scale: 0.92)))
+        .animation(.smooth(duration: 0.25), value: status)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(status.label)
     }

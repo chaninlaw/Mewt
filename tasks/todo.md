@@ -64,16 +64,41 @@ User swapped to fill-style SVGs with tighter viewBox (rendering looks better) an
 - [x] `TrayController.composeMenuBarImage` — badge resolves asset-catalog first, falls back to SF Symbol. Both end up at ~55% canvas.
 - [x] `MicStatusTests.mutedBadgeIsZzz` → `mutedBadgeIsPawPrint`. Tests 183/183 green.
 
-### Stage 2 — Tray popover redesign + copy (waiting on Stage 1 sign-off)
-- Hero status card with `.contentTransition(.symbolEffect(.replace))` on mascot
-- Mute button: icon-bearing
-- Hotkey hints + Input Level collapsed to compact footer
-- Copy fixes: "Talking (PTT)" → "Push-to-Talk"
+### Stage 2 — Tray popover redesign + copy ✅ (2026-05-07)
+- [x] Hero status card — surfaced VStack (`.quaternary` fill, 12pt corner) with mascot 80pt + status `.title3.weight(.semibold)` + optional caption message, center-aligned
+- [x] Mascot state-change transition — `.id(status)` + `.opacity.combined(with: .scale(0.92))` + `.smooth(0.25)` on `VectorPoseView`. Note: dropped `symbolEffect(.replace)` from original wording — it's SF-Symbol-only and our mascot is custom SVG since Stage 1.6, so the modifier would be a no-op. The opacity+scale transition achieves the same intent on vector assets.
+- [x] Mute button: `Label(systemImage: mic.fill / mic.slash.fill)` + `.borderedProminent` + `.controlSize(.large)`. Accessibility strings preserved.
+- [x] Input Level demoted: `.caption2` label, slim ProgressView, no surrounding divider — tight rhythm under the mute button.
+- [x] Hotkey hints moved below input level + `Divider()`, just above Settings/Quit row. Pill design unchanged (already compact).
+- [x] Copy fix: `MicStatus.pushToTalk.label` "Talking (PTT)" → "Push-to-Talk". Internal symbols (`pushToTalk`, `onPTTDown`, hotkey-name `"pushToTalk"`) untouched — not user-visible.
+- [x] `xcodebuild build` + `xcodebuild test` green — 154/154 pass.
+
+#### Review (2026-05-07)
+- ContentView grew from 93 → 109 lines net; the hero card extracted into its own private `HeroStatusCard` view to keep the body scannable.
+- No tests broke. `MicStatusTests.nonEmptyLabels` covered the pushToTalk copy change implicitly (no string-pinning assertion existed). No new tests added — Stage 2 is layout/copy, both visible-only changes.
+- SourceKit indexer reported transient "Cannot find 'MicStatus'" / "No such module 'KeyboardShortcuts'" diagnostics during the edit; resolved at xcodebuild time per the existing lesson on SourceKit transient noise.
+- Sprite-engine path (`PoseRenderer`) untouched — its render dispatch is via `MascotView`, and the hero card just sets `size: 80` instead of `size: 64`. When the cat pack flag flips back on, the bigger sprite blits at 80pt automatically.
 
 ### Stage 3 — Settings polish (waiting on Stage 2 sign-off)
 - `Label` + system-icon section headers
 - Replace verbose paragraphs with help popovers (`?`)
 - Decide single Form vs tabs
+
+### Stage 2.5 — In-popover Settings + dark-launch overlay ✅ (2026-05-07)
+
+User decided floating mascot is clutter (menu-bar icon already conveys mute), and Settings should live inside the popover so the separate Settings window goes away. Settings reduced to ~3 rows after dropping the mascot toggle, so a state-based page swap is enough — no `NavigationStack` chrome needed.
+
+- [x] **`MewtFeatureFlags.overlayEnabled = false`** — new compile-time flag, mirrors `bundledPackEnabled` pattern. Off → `OverlayWindowController` is never installed; `OverlayWindow` + `OverlayWindowController` + `AppState.overlayVisible` stay compiled but dormant. Flip on to restore the panel.
+- [x] **`MewtApp.swift`** — gate overlay install on the flag in `applicationDidFinishLaunching`. Stub the `Settings` scene to `EmptyView()` (kept so the App protocol has a Scene; nothing in-app calls `openSettings()` anymore). `SettingsView.swift` deleted earlier by the user — reference removed.
+- [x] **`ContentView.swift`** — split into `MainPage` + `SettingsPage` with `@State Page` driving a switch. Settings button on `MainPage` flips `page = .settings` (preserves ⌘, shortcut). `SettingsPage` shows back-chevron header + 2 `KeyboardShortcuts.Recorder`s + info caption; ⎋ also returns. Asymmetric `.move(.leading)` / `.move(.trailing)` transitions give a subtle slide between pages, animated with `.smooth(0.22)`.
+- [x] `xcodebuild build` + `xcodebuild test` green — 154/154 pass.
+
+#### Review (2026-05-07)
+
+- The popover's NSPopover is persistent (`TrayController` mounts the `NSHostingController` once at install) — `@State page` survives across show/hide of the popover, so reopening returns to whichever page the user left on. That's the intended behavior; if a "always reset to main on reopen" call is wanted later, wire it through `TrayController.popoverWillShow`.
+- Kept `AppState.overlayVisible` + UserDefaults key alive (no churn) since `OverlayWindowController.observeVisibility` reads it and we wanted minimal blast radius. When `overlayEnabled` flips back on, the property + persistence work as before with no thaw cost.
+- The `Settings { EmptyView() }` stub looks dead but is load-bearing: SwiftUI's `App.body` requires a Scene, and `.accessory` apps without one have surprising failure modes (no application menu, occasional `init` ordering issues). Cheap to keep.
+- Stage 3 (Settings polish) becomes simpler now — there's no separate Settings window to redesign, just the in-popover `SettingsPage`. Help popovers / section headers can drop in there directly.
 
 ---
 

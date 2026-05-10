@@ -17,7 +17,7 @@ extension MicStatus {
         case .unmuted:    "Unmuted"
         case .muted:      "Muted"
         case .talking:    "Talking"
-        case .pushToTalk: "Talking (PTT)"
+        case .pushToTalk: "Push-to-Talk"
         }
     }
 

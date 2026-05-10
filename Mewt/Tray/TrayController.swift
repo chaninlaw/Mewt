@@ -169,7 +169,7 @@ final class TrayController {
             withTimeInterval: 1.0 / Self.animationFps,
             repeats: true
         ) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self, let button = self.statusItem?.button else { return }
                 self.animationFrameIndex = (self.animationFrameIndex + 1) % Self.animationFrameCount
                 self.renderAnimationFrame(button: button, framePrefix: framePrefix, tint: tint, label: label)
