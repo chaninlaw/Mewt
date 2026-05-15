@@ -4,6 +4,10 @@
 # Xcode user-specific state
 xcuserdata/
 
+# Xcode CLI build artifacts (when scheme isn't shared, xcodebuild
+# drops outputs into ./build/ instead of DerivedData)
+build/
+
 # Python (asset pipeline)
 __pycache__/
 *.pyc

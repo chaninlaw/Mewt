@@ -2,21 +2,118 @@ import KeyboardShortcuts
 import SwiftUI
 
 struct ContentView: View {
-    enum Page { case main, settings }
+    enum Page: Hashable { case welcome, main, settings }
 
     @Environment(AppState.self) private var appState
     @State private var page: Page = .main
 
+    private var effectivePage: Page {
+        appState.hasCompletedWelcome ? page : .welcome
+    }
+
     var body: some View {
         Group {
-            switch page {
+            switch effectivePage {
+            case .welcome:  WelcomePage(onContinue: handleWelcomeContinue)
             case .main:     MainPage(onOpenSettings: { page = .settings })
             case .settings: SettingsPage(onBack: { page = .main })
             }
         }
         .padding(16)
         .frame(width: 280)
-        .animation(.smooth(duration: 0.22), value: page)
+        .animation(.smooth(duration: 0.22), value: effectivePage)
+    }
+
+    private func handleWelcomeContinue() {
+        switch appState.micPermissionState {
+        case .notDetermined:
+            // System dialog fires here — completion runs after the user
+            // taps Allow/Deny, so the welcome card stays mounted until
+            // they've actually answered.
+            appState.requestMicrophoneAccess { _ in
+                appState.completeWelcome()
+            }
+        case .granted, .denied:
+            // Decision already on file; just dismiss the card.
+            appState.completeWelcome()
+        }
+    }
+}
+
+private struct WelcomePage: View {
+    @Environment(AppState.self) private var appState
+    let onContinue: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "mic.fill")
+                    .font(.title2)
+                    .foregroundStyle(.tint)
+                    .frame(width: 30, height: 30)
+                    .background(.quaternary, in: .circle)
+                Text("Welcome to Mewt").font(.headline)
+            }
+
+            Text("One-click mute for your microphone, right from the menu bar. Live input level, push-to-talk, global hotkeys.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 8) {
+                PrivacyBullet(
+                    icon: "lock.shield",
+                    text: "Microphone access is used only to control mute and show input level."
+                )
+                PrivacyBullet(
+                    icon: "internaldrive",
+                    text: "Audio is processed locally — never recorded, stored, or transmitted."
+                )
+                PrivacyBullet(
+                    icon: "wifi.slash",
+                    text: "No account, no network, no analytics."
+                )
+            }
+
+            Button(action: onContinue) {
+                Label(
+                    primaryButtonTitle,
+                    systemImage: appState.micPermissionState == .notDetermined ? "mic.fill" : "arrow.right"
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .keyboardShortcut(.defaultAction)
+            .accessibilityLabel(primaryButtonTitle)
+        }
+        .transition(.opacity)
+    }
+
+    private var primaryButtonTitle: String {
+        switch appState.micPermissionState {
+        case .notDetermined: return "Grant Microphone Access"
+        case .denied:        return "Continue"
+        case .granted:       return "Get Started"
+        }
+    }
+}
+
+private struct PrivacyBullet: View {
+    let icon: String
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundStyle(.tint)
+                .frame(width: 14)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 

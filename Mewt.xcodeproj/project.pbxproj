@@ -21,7 +21,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		BCB6C34B2F9A113500934366 /* Mewt.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mewt.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BCB6C34B2F9A113500934366 /* Mewt Mic.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Mewt Mic.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BCB6C50100000000000000B6 /* MewtTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MewtTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -72,7 +72,7 @@
 		BCB6C34C2F9A113500934366 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				BCB6C34B2F9A113500934366 /* Mewt.app */,
+				BCB6C34B2F9A113500934366 /* Mewt Mic.app */,
 				BCB6C50100000000000000B6 /* MewtTests.xctest */,
 			);
 			name = Products;
@@ -101,7 +101,7 @@
 				BCB6C40200000000000000A2 /* KeyboardShortcuts */,
 			);
 			productName = Mewt;
-			productReference = BCB6C34B2F9A113500934366 /* Mewt.app */;
+			productReference = BCB6C34B2F9A113500934366 /* Mewt Mic.app */;
 			productType = "com.apple.product-type.application";
 		};
 		BCB6C50100000000000000B2 /* MewtTests */ = {
@@ -348,16 +348,18 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Mewt needs microphone access to mute your mic system-wide and detect when you're talking while muted.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Mewt uses your microphone to mute it system-wide and show the input level on the menu bar. Audio is processed locally and never recorded, stored, or transmitted.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.chaninlaw.Mewt;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_MODULE_NAME = Mewt;
+				PRODUCT_NAME = "Mewt Mic";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -384,16 +386,18 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Mewt needs microphone access to mute your mic system-wide and detect when you're talking while muted.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Mewt uses your microphone to mute it system-wide and show the input level on the menu bar. Audio is processed locally and never recorded, stored, or transmitted.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.chaninlaw.Mewt;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_MODULE_NAME = Mewt;
+				PRODUCT_NAME = "Mewt Mic";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -423,7 +427,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Mewt.app/Contents/MacOS/Mewt";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Mewt Mic.app/Contents/MacOS/Mewt Mic";
 			};
 			name = Debug;
 		};
@@ -446,7 +450,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Mewt.app/Contents/MacOS/Mewt";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Mewt Mic.app/Contents/MacOS/Mewt Mic";
 			};
 			name = Release;
 		};

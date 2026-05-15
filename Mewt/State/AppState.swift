@@ -1,7 +1,21 @@
 import AppKit
+import AVFoundation
 import Foundation
 import Observation
 import os
+
+enum MicPermissionState {
+    case notDetermined, denied, granted
+
+    init(_ status: AVAuthorizationStatus) {
+        switch status {
+        case .authorized:        self = .granted
+        case .denied, .restricted: self = .denied
+        case .notDetermined:     self = .notDetermined
+        @unknown default:        self = .denied
+        }
+    }
+}
 
 @Observable
 @MainActor
@@ -63,6 +77,19 @@ final class AppState {
 
     private static let overlayVisibleKey = "overlay.visible"
 
+    /// Cached snapshot of the system mic-permission state. Refreshed on
+    /// `start()` and after `requestMicrophoneAccess()` completes. Drives
+    /// the welcome page and the popover's empty-state copy.
+    private(set) var micPermissionState: MicPermissionState = .notDetermined
+
+    /// True once the user has dismissed the welcome card. Persisted so
+    /// the welcome page only shows on first launch — even if the user
+    /// later revokes mic access in System Settings, we don't pop the
+    /// welcome flow again (it'd feel like a permission-bug loop).
+    private(set) var hasCompletedWelcome: Bool = false
+
+    private static let welcomeCompletedKey = "welcome.completed"
+
     private let muteController: any MicMuteControlling
     private let levelMonitor: any AudioLevelMonitoring
     private let hotkeys: any HotkeyProviding
@@ -94,6 +121,8 @@ final class AppState {
         // bool(forKey:) collapses "missing" and "false" into the same
         // value, and we want missing → true.
         self.overlayVisible = (defaults.object(forKey: Self.overlayVisibleKey) as? Bool) ?? true
+        self.hasCompletedWelcome = defaults.bool(forKey: Self.welcomeCompletedKey)
+        self.micPermissionState = MicPermissionState(AVCaptureDevice.authorizationStatus(for: .audio))
         wireCallbacks()
     }
 
@@ -139,20 +168,71 @@ final class AppState {
     /// Brings up hardware: CoreAudio device listener, AVAudioEngine input tap,
     /// Carbon hotkey registration. Skipped under XCTest so test runs don't
     /// twiddle the real mic or prompt for permission.
+    ///
+    /// When mic permission is `.notDetermined` we deliberately skip
+    /// `startLevelMonitor()` so the system permission dialog doesn't
+    /// fire before the user has seen the welcome card. The welcome
+    /// page's "Grant Microphone Access" button drives
+    /// `requestMicrophoneAccess()`, which sequences the system dialog
+    /// *after* the user has read why we need it (App Store Guideline
+    /// 5.1.1 — contextual permission requests).
     func start() {
         guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
         muteController.startObservingDeviceChange()
-        if !startLevelMonitor() {
-            // Launched with no input device. `startLevelMonitor` returned
-            // false on `noInputDevice` without setting state (since the
-            // retry caller usually owns that path); set it here for the
-            // launch case.
-            inputAvailable = false
-            if statusMessage.isEmpty {
-                statusMessage = "No microphone detected"
+        // Refresh in case the user changed permission in System Settings
+        // between launches.
+        refreshMicPermissionState()
+        switch micPermissionState {
+        case .granted:
+            if !startLevelMonitor() {
+                inputAvailable = false
+                if statusMessage.isEmpty {
+                    statusMessage = "No microphone detected"
+                }
             }
+        case .denied:
+            inputAvailable = false
+            statusMessage = "Mic permission needed"
+        case .notDetermined:
+            // Hold off — welcome flow owns the prompt.
+            inputAvailable = false
         }
         hotkeys.start()
+    }
+
+    /// Re-read TCC state. Cheap, synchronous; safe to call on every
+    /// popover open if needed.
+    func refreshMicPermissionState() {
+        micPermissionState = MicPermissionState(AVCaptureDevice.authorizationStatus(for: .audio))
+    }
+
+    /// Triggers the system mic-permission dialog (no-op once decided —
+    /// AVFoundation returns the cached answer without re-prompting).
+    /// Updates `micPermissionState` and brings the level monitor up
+    /// on grant. Completion fires on the main actor.
+    func requestMicrophoneAccess(completion: ((Bool) -> Void)? = nil) {
+        AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
+            Task { @MainActor [weak self] in
+                guard let self else { completion?(granted); return }
+                self.micPermissionState = granted ? .granted : .denied
+                if granted {
+                    _ = self.startLevelMonitor()
+                    if self.statusMessage == "Mic permission needed" {
+                        self.statusMessage = ""
+                    }
+                } else if self.statusMessage.isEmpty {
+                    self.statusMessage = "Mic permission needed"
+                }
+                completion?(granted)
+            }
+        }
+    }
+
+    /// Marks the welcome card as dismissed. Idempotent.
+    func completeWelcome() {
+        guard !hasCompletedWelcome else { return }
+        hasCompletedWelcome = true
+        defaults.set(true, forKey: Self.welcomeCompletedKey)
     }
 
     /// Starts (or restarts) the input tap. Called at `start()` and
