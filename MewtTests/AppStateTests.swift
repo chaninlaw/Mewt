@@ -124,9 +124,13 @@ struct AppStateTests {
 
     @Test("Device change while unmuted re-applies unmute")
     func deviceChangeReappliesUnmute() {
+        // Hold the AppState — `wireCallbacks` uses [weak self], so
+        // letting `app` drop here lets the callback no-op when
+        // `simulateDeviceChange` fires (and `unmuteCallCount` stays 0).
         let (app, mute, _, _, _) = makeState()
         mute.simulateDeviceChange()
         #expect(mute.unmuteCallCount == 1)
+        #expect(app.isMuted == false)
     }
 
     @Test("Device change with transient mute() failure does NOT revert mute intent")
