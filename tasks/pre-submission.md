@@ -11,7 +11,7 @@ Use this before pushing a build to App Store Connect. Tracks every reviewer-bloc
 - [ ] Archive build (`Product → Archive`) succeeds
 - [x] Code signing: **Developer ID Application** (for notarisation) **or** **Apple Distribution** (for direct App Store)
 - [x] Hardened Runtime enabled (`ENABLE_HARDENED_RUNTIME = YES` in pbxproj — re-verify in archive's `codesign -d --entitlements - <app>` output)
-- [x] Sandbox enabled with **only** `com.apple.security.app-sandbox` + `com.apple.security.device.audio-input` (verified in `Mewt/Mewt.entitlements`)
+- [x] Sandbox enabled with `com.apple.security.app-sandbox` + `com.apple.security.device.audio-input` (verified in `Mewt/Mewt.entitlements`). Signed bundle also includes `com.apple.security.files.user-selected.read-only` injected by Xcode as a sandbox default — benign, not a rejection cause
 
 ## 2. Info.plist Audit
 
@@ -36,22 +36,22 @@ Source: `Mewt/PrivacyInfo.xcprivacy`. Re-verify post-archive with `plutil -p <ap
 
 ## 4. Fresh-Install Permission Flow (manual smoke test)
 
-On a clean macOS user (or after `tccutil reset Microphone com.chaninlaw.Mewt`):
+Tested against archived `Mewt Mic.app` after `tccutil reset Microphone com.chaninlaw.Mewt` + `defaults delete com.chaninlaw.Mewt`. All 11 checkpoints passed.
 
-- [ ] Launch app → cat icon appears in menu bar, **no Dock icon**
-- [ ] Click menu-bar icon → welcome card appears (NOT the main page)
-- [ ] Welcome card explains: what Mewt does + privacy guarantees (local only, no network, no account)
-- [ ] **System mic dialog has not fired yet** at this point
-- [ ] Click "Grant Microphone Access" → system dialog appears with the new usage string
-- [ ] Tap **Allow** → welcome dismisses, main page shows input-level bar, mute button works
-- [ ] Quit & relaunch → welcome card **does NOT** show again
-- [ ] Toggle mute via menu-bar (right-click) and hotkey (⌥M) — both work
-- [ ] PTT (hold ⌥Space) — temporary unmute while held, mic re-mutes on release
+- [x] Launch app → cat icon appears in menu bar, **no Dock icon**
+- [x] Click menu-bar icon → welcome card appears (NOT the main page)
+- [x] Welcome card explains: what Mewt does + privacy guarantees (local only, no network, no account)
+- [x] **System mic dialog has not fired yet** at this point
+- [x] Click "Grant Microphone Access" → system dialog appears with the new usage string
+- [x] Tap **Allow** → welcome dismisses, main page shows input-level bar, mute button works
+- [x] Quit & relaunch → welcome card **does NOT** show again
+- [x] Toggle mute via menu-bar (right-click) and hotkey (⌥M) — both work
+- [x] PTT (hold ⌥Space) — temporary unmute while held, mic re-mutes on release
 
 Repeat with **Deny** at the system dialog:
 
-- [ ] Welcome dismisses, main page shows "Mic permission needed"
-- [ ] Mute still works via menu-bar click / hotkey (oreAudio path is separate from level monitor)
+- [x] Welcome dismisses, main page shows "Mic permission needed"
+- [x] Mute still works via menu-bar click / hotkey (CoreAudio path is separate from level monitor)
 
 ## 5. App Store Connect Metadata
 
