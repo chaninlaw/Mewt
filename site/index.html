@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mewt Mic — Support</title>
+    <meta
+      name="description"
+      content="Help, FAQ, and contact for Mewt Mic, a privacy-first menu-bar mic mute for macOS."
+    />
+    <link rel="icon" type="image/png" href="cat.svg" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <img src="cat.svg" alt="Mewt mascot" />
+        <div>
+          <div class="title">Mewt Mic</div>
+          <div class="subtitle">Menu-bar mic mute for macOS</div>
+        </div>
+      </header>
+
+      <h1>Support</h1>
+      <p>
+        Mewt Mic is a tiny menu-bar utility that mutes your microphone
+        system-wide and shows the input level at a glance. This page covers the
+        most common questions. If you don't find what you need, get in touch
+        below.
+      </p>
+
+      <h2>Quick start</h2>
+      <ol>
+        <li>
+          Launch Mewt Mic. A cat-face icon appears in the menu bar (top-right of
+          the screen).
+        </li>
+        <li>
+          Click the icon. On first launch, a welcome card explains what the app
+          does and how the microphone permission is used.
+        </li>
+        <li>
+          Click <strong>Grant Microphone Access</strong> and choose
+          <strong>Allow</strong> in the system dialog.
+        </li>
+        <li>
+          That's it. Use the Mute button, the hotkey, or right-click the
+          menu-bar icon to toggle.
+        </li>
+      </ol>
+
+      <h2>Default hotkeys</h2>
+      <div class="card">
+        <p><strong>Toggle mute:</strong> <kbd>⌥</kbd> + <kbd>M</kbd></p>
+        <p>
+          <strong>Push to talk:</strong> hold <kbd>⌥</kbd> +
+          <kbd>Space</kbd> (mic unmutes while held, re-mutes on release)
+        </p>
+        <p class="meta">
+          Both hotkeys can be customized in <strong>Settings…</strong> inside
+          the popover.
+        </p>
+      </div>
+
+      <h2>FAQ</h2>
+
+      <h3>I don't see Mewt in the Dock.</h3>
+      <p>
+        That's by design. Mewt Mic is a menu-bar accessory app
+        (<code>LSUIElement</code>) and only lives in the menu bar. Look for the
+        cat-face icon in the top-right of the screen.
+      </p>
+
+      <h3>The mute doesn't seem to affect Zoom / Google Meet / Discord.</h3>
+      <p>
+        Mewt mutes at the operating-system level (CoreAudio input). Most meeting
+        apps respect this — your voice will not be transmitted. Some apps
+        display their own in-app mute state separately from the system input, so
+        the app's own mute button may still show as "unmuted" even though no
+        audio is captured. The input-level bar in Mewt is the source of truth:
+        if it stays flat while you talk, you are muted.
+      </p>
+
+      <h3>I clicked "Don't Allow" on the microphone prompt.</h3>
+      <p>
+        You can re-enable access in
+        <strong>System Settings → Privacy &amp; Security → Microphone</strong>
+        and turn on <em>Mewt Mic</em>. Toggling the mute button via the menu-bar
+        will still work, since that path uses a separate CoreAudio API that does
+        not require permission. The input-level meter and the talking indicator
+        require microphone access to function.
+      </p>
+
+      <h3>Does Mewt send any data anywhere?</h3>
+      <p>
+        No. The app makes no network requests, has no analytics, no crash
+        reporting, no account, and no sign-in. Audio is processed locally and is
+        never recorded, stored, or transmitted. See the
+        <a href="privacy.html">Privacy Policy</a>.
+      </p>
+
+      <h3>How do I quit Mewt?</h3>
+      <p>
+        Right-click the menu-bar icon and choose <strong>Quit</strong>. Or use
+        <kbd>⌘</kbd> + <kbd>Q</kbd> while the popover is open.
+      </p>
+
+      <h3>How do I uninstall?</h3>
+      <p>
+        Drag <strong>Mewt Mic</strong> from your Applications folder to the
+        Trash. To clear the saved hotkey and preferences, you can also run
+        <code>defaults delete com.chaninlaw.Mewt</code> in Terminal.
+      </p>
+
+      <h3>The hotkey doesn't work.</h3>
+      <p>Two common causes:</p>
+      <ul>
+        <li>
+          Another app is already bound to <kbd>⌥</kbd> + <kbd>M</kbd> or
+          <kbd>⌥</kbd> + <kbd>Space</kbd>. Open <strong>Settings…</strong> in
+          Mewt and re-bind to a free combination.
+        </li>
+        <li>
+          macOS hasn't granted Mewt Accessibility access yet (only required if
+          you change the hotkey to a system-reserved combo). Visit
+          <strong
+            >System Settings → Privacy &amp; Security → Accessibility</strong
+          >
+          if prompted.
+        </li>
+      </ul>
+
+      <h3>Which macOS versions are supported?</h3>
+      <p>macOS 14 (Sonoma) and later.</p>
+
+      <h2>Contact</h2>
+      <p>For bugs, feature requests, or questions:</p>
+      <p>
+        <a href="mailto:chanin.lor@gmail.com">chanin.lor@gmail.com</a>
+      </p>
+      <p class="meta">Replies usually within a few business days.</p>
+
+      <nav>
+        <a href="index.html">Support</a>
+        <a href="privacy.html">Privacy</a>
+      </nav>
+
+      <footer>
+        Mewt Mic is made with care. No tracking, no accounts, no cloud.
+      </footer>
+    </main>
+  </body>
+</html>
