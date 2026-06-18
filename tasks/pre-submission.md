@@ -6,30 +6,32 @@ Use this before pushing a build to App Store Connect. Tracks every reviewer-bloc
 
 ## 1. Build & Sign
 
-- [ ] `xcodebuild -scheme Mewt -configuration Release build` — green
-- [ ] `xcodebuild -scheme Mewt test` — 154/154 passing
+- [x] `xcodebuild -scheme Mewt -configuration Release build` — green
+- [x] `xcodebuild -scheme Mewt test` — 154/154 passing
 - [ ] Archive build (`Product → Archive`) succeeds
-- [ ] Code signing: **Developer ID Application** (for notarisation) **or** **Apple Distribution** (for direct App Store)
-- [ ] Hardened Runtime enabled (verify in archive's `codesign -d --entitlements - <app>` output)
-- [ ] Sandbox enabled with **only** `com.apple.security.app-sandbox` + `com.apple.security.device.audio-input`
+- [x] Code signing: **Developer ID Application** (for notarisation) **or** **Apple Distribution** (for direct App Store)
+- [x] Hardened Runtime enabled (`ENABLE_HARDENED_RUNTIME = YES` in pbxproj — re-verify in archive's `codesign -d --entitlements - <app>` output)
+- [x] Sandbox enabled with **only** `com.apple.security.app-sandbox` + `com.apple.security.device.audio-input` (verified in `Mewt/Mewt.entitlements`)
 
 ## 2. Info.plist Audit
 
-Run `plutil -p <Mewt Mic.app>/Contents/Info.plist` against the archived build and confirm:
+Info.plist is generated (`GENERATE_INFOPLIST_FILE = YES`); source of truth is `INFOPLIST_KEY_*` in `Mewt.xcodeproj/project.pbxproj`. Re-verify post-archive with `plutil -p <Mewt Mic.app>/Contents/Info.plist`.
 
-- [ ] `LSUIElement = YES` (menu-bar accessory, no Dock icon)
-- [ ] `LSApplicationCategoryType = "public.app-category.utilities"`
-- [ ] `NSMicrophoneUsageDescription` matches current behavior — **no mention of "talk-while-muted detection"**. Expected copy:
+- [x] `LSUIElement = YES` (menu-bar accessory, no Dock icon) — `INFOPLIST_KEY_LSUIElement = YES`
+- [x] `LSApplicationCategoryType = "public.app-category.utilities"` — `INFOPLIST_KEY_LSApplicationCategoryType`
+- [x] `NSMicrophoneUsageDescription` matches current behavior — **no mention of "talk-while-muted detection"**. Current copy in pbxproj:
   > Mewt uses your microphone to mute it system-wide and show the input level on the menu bar. Audio is processed locally and never recorded, stored, or transmitted.
-- [ ] `CFBundleShortVersionString` matches `MARKETING_VERSION`
-- [ ] `CFBundleVersion` bumped from previous submission
+- [x] `CFBundleShortVersionString` matches `MARKETING_VERSION` (both `1.0`, generated automatically)
+- [x] `CFBundleVersion` set (`CURRENT_PROJECT_VERSION = 1`) — first submission, no prior build to bump from
 
 ## 3. Privacy Manifest
 
-- [ ] `Mewt/PrivacyInfo.xcprivacy` present in archived bundle (`<app>/Contents/Resources/PrivacyInfo.xcprivacy`)
-- [ ] `NSPrivacyTracking` = `false`
-- [ ] `NSPrivacyCollectedDataTypes` = empty array
-- [ ] `NSPrivacyAccessedAPITypes` declares `NSPrivacyAccessedAPICategoryUserDefaults` with reason `CA92.1`
+Source: `Mewt/PrivacyInfo.xcprivacy`. Re-verify post-archive with `plutil -p <app>/Contents/Resources/PrivacyInfo.xcprivacy`.
+
+- [x] `Mewt/PrivacyInfo.xcprivacy` present in source — confirm in archived bundle (`<app>/Contents/Resources/PrivacyInfo.xcprivacy`)
+- [x] `NSPrivacyTracking` = `false`
+- [x] `NSPrivacyCollectedDataTypes` = empty array
+- [x] `NSPrivacyAccessedAPITypes` declares `NSPrivacyAccessedAPICategoryUserDefaults` with reason `CA92.1`
 - [ ] If SPM dependencies ship their own privacy manifests, Xcode bundles them under `<app>/Contents/Resources/<package>.bundle/PrivacyInfo.xcprivacy` — confirm `KeyboardShortcuts` is present (or document its absence in reviewer notes)
 
 ## 4. Fresh-Install Permission Flow (manual smoke test)
@@ -49,15 +51,15 @@ On a clean macOS user (or after `tccutil reset Microphone com.chaninlaw.Mewt`):
 Repeat with **Deny** at the system dialog:
 
 - [ ] Welcome dismisses, main page shows "Mic permission needed"
-- [ ] Mute still works via menu-bar click / hotkey (CoreAudio path is separate from level monitor)
+- [ ] Mute still works via menu-bar click / hotkey (oreAudio path is separate from level monitor)
 
 ## 5. App Store Connect Metadata
 
 - [ ] **Primary Category**: Utilities (matches `LSApplicationCategoryType`)
 - [ ] **Secondary Category**: Entertainment (per `MARKETING.md`)
 - [ ] **Privacy Practices** answered: **Data Not Collected** (no analytics, no network)
-- [ ] **Support URL** — public page describing the app + contact info
-- [ ] **Privacy Policy URL** — public page even though we don't collect data (Apple requires it)
+- [x] **Support URL** — `https://mewt.nin-070.workers.dev/` (Cloudflare Workers, source in `site/`)
+- [x] **Privacy Policy URL** — `https://mewt.nin-070.workers.dev/privacy.html`
 - [ ] **Screenshots**: 5 images per the plan in `MARKETING.md` — but **drop** the "Talk-while-muted alert" screenshot (feature retired 2026-05-07)
 - [ ] **App description** — do **NOT** mention "Mewt Plus $4.99/year" or any paid tier; 1.0 ships free-only without IAP
 - [ ] **Keywords** — from `MARKETING.md`: mute mic, virtual microphone, meeting companion, desk pet, animated mic indicator
@@ -99,13 +101,13 @@ Permissions:
 
 No account or sign-in is required. The app works fully offline.
 
-Privacy policy: <YOUR_PRIVACY_URL>
-Support: <YOUR_SUPPORT_URL>
+Privacy policy: https://mewt.nin-070.workers.dev/privacy.html
+Support: https://mewt.nin-070.workers.dev/
 ```
 
 ## 7. Final Sanity
 
-- [ ] No `print(...)` statements in Release build (use `Logger` instead — currently clean)
-- [ ] No TODO/FIXME comments referring to "ship blocker" — `grep -rn "TODO\|FIXME" Mewt/`
-- [ ] Bundle name in Finder reads **"Mewt Mic"** (current `PRODUCT_NAME`) — decide whether to keep "Mic" suffix or rename to plain "Mewt" before submission (display name affects discoverability)
-- [ ] `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` are unique vs. last submission
+- [x] No `print(...)` statements in source (`grep -rn "print(" Mewt/` clean — uses `Logger`)
+- [x] No TODO/FIXME comments in source (`grep -rn "TODO\|FIXME" Mewt/` clean)
+- [x] Bundle name in Finder reads **"Mewt Mic"** (current `PRODUCT_NAME`) — decision: keep `Mewt Mic` for App Store discoverability ("Mic" in app name helps users searching for "mute mic"/"microphone")
+- [x] `MARKETING_VERSION = 1.0`, `CURRENT_PROJECT_VERSION = 1` — first submission, no prior build to clash with
