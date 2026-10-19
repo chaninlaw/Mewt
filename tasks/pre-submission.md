@@ -62,7 +62,7 @@ Repeat with **Deny** at the system dialog:
 - [x] **Privacy Policy URL** — `https://mewt.nin-070.workers.dev/privacy.html`
 - [ ] **Screenshots**: 5 images per the plan in `MARKETING.md` — but **drop** the "Talk-while-muted alert" screenshot (feature retired 2026-05-07)
 - [ ] **App description** — do **NOT** mention "Mewt Plus $4.99/year" or any paid tier; 1.0 ships free-only without IAP
-- [ ] **Keywords** — from `MARKETING.md`: mute mic, virtual microphone, meeting companion, desk pet, animated mic indicator
+- [ ] **Keywords** — from `MARKETING.md` (canonical): mute mic, microphone, meeting companion, desk pet, mic indicator, push to talk, menu bar
 
 ## 6. App Review Notes (paste into App Store Connect)
 
