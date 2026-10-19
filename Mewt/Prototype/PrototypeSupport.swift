@@ -71,6 +71,8 @@ final class ProtoTipStore {
     var layout: ProtoLayout = .settingsSection
     var mode: ProtoPurchaseMode = .pinnedConfirmIn
     var forced: ProtoForcedState = .live
+    /// Set by `ProtoRemote`; `ContentView` applies and clears it.
+    var requestedPage: String?
 
     private(set) var products: [Product] = []
     private(set) var phase: Phase = .loading
@@ -609,6 +611,63 @@ struct ProtoSwitcherBar: View {
         let all = ProtoLayout.allCases
         let i = all.firstIndex(of: store.layout)!
         store.layout = all[(i + delta + all.count) % all.count]
+    }
+}
+#endif
+
+#if DEBUG
+// MARK: - Remote control (screenshot driver only)
+
+/// Lets a terminal script drive the prototype for screenshots:
+/// post distributed notification `com.chaninlaw.Mewt.proto` with an object
+/// string like `layout=B,page=support,state=live,open=1`. After each command
+/// the visible windows are dumped to `<container tmp>/proto-windows.txt`.
+@MainActor
+enum ProtoRemote {
+    static var showPopover: (() -> Void)?
+    static var closePopover: (() -> Void)?
+
+    static func install() {
+        DistributedNotificationCenter.default().addObserver(
+            forName: .init("com.chaninlaw.Mewt.proto"), object: nil, queue: .main
+        ) { note in
+            let cmd = note.object as? String ?? ""
+            MainActor.assumeIsolated { run(cmd) }
+        }
+    }
+
+    private static func run(_ cmd: String) {
+        let store = ProtoTipStore.shared
+        for pair in cmd.split(separator: ",") {
+            let kv = pair.split(separator: "=", maxSplits: 1).map(String.init)
+            guard kv.count == 2 else { continue }
+            let v = kv[1]
+            switch kv[0] {
+            case "layout": if let l = ProtoLayout(rawValue: v) { store.layout = l }
+            case "state":  if let s = ProtoForcedState(rawValue: v) { store.forced = s }
+            case "mode":   if let i = Int(v), ProtoPurchaseMode.allCases.indices.contains(i) { store.mode = ProtoPurchaseMode.allCases[i] }
+            case "page":   store.requestedPage = v
+            case "open":   v == "1" ? showPopover?() : closePopover?()
+            case "window": v == "1" ? ProtoSupportWindow.shared.show() : ProtoSupportWindow.shared.window?.close()
+            case "buy":
+                guard let p = store.products.first(where: { $0.id.hasSuffix(v) }) else { store.note("buy: no product \(v)"); break }
+                let window = store.layout == .window ? ProtoSupportWindow.shared.window : ProtoHooks.popoverWindow
+                Task { await store.purchase(p, in: window, action: nil) }
+            default: break
+            }
+        }
+        Task {
+            try? await Task.sleep(for: .milliseconds(700))
+            dump()
+        }
+    }
+
+    private static func dump() {
+        let lines = NSApp.windows.filter(\.isVisible).map { w in
+            "\(w.windowNumber)\t\(type(of: w))\t\(w.title)\t\(NSStringFromRect(w.frame))"
+        }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("proto-windows.txt")
+        try? lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
     }
 }
 #endif

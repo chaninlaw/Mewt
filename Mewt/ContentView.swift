@@ -33,6 +33,15 @@ struct ContentView: View {
         #if DEBUG
         // PROTOTYPE (#5): "reload on next popover open".
         .onAppear { Task { await ProtoTipStore.shared.load() } }
+        .onChange(of: ProtoTipStore.shared.requestedPage) { _, requested in
+            guard let requested else { return }
+            switch requested {
+            case "settings": page = .settings
+            case "support":  page = .support
+            default:         page = .main
+            }
+            ProtoTipStore.shared.requestedPage = nil
+        }
         #endif
         .padding(16)
         .frame(width: 280)

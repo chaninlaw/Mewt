@@ -70,6 +70,12 @@ final class TrayController {
         // it during a purchase, and start the Transaction.updates listener.
         ProtoHooks.popover = popover
         ProtoTipStore.shared.startListener()
+        ProtoRemote.showPopover = { [weak self] in
+            guard let self, !self.popover.isShown else { return }
+            self.togglePopover()
+        }
+        ProtoRemote.closePopover = { [weak self] in self?.popover.performClose(nil) }
+        ProtoRemote.install()
         #endif
 
         updateButton()
