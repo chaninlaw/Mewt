@@ -82,7 +82,7 @@ Creating the IAP: Apps > Monetization > In-App Purchases > (+) > Consumable, the
 
 > The app version, subscription group, and every subscription or In-App Purchase you want reviewed together must all be added to the same draft submission before you click Submit for Review.
 
-Because 1.0 is scoped as free with no IAP, tips will first ship in a later version (for example 1.1), with every tip product in the same draft submission. After that, more tip tiers can be added without a binary update.
+Implication for Mewt: the map (#2) puts tips in **1.0**, so every tip product has to be in the same draft submission as the 1.0 binary. This means the Paid Apps Agreement must be active and the IAPs fully filled in (metadata plus review screenshot) before 1.0 can be submitted. If tips slip to a later version, that version's binary carries them instead. Once the first consumable is approved, more tip tiers can be added without a binary update.
 
 **Agreement** ([Sign and update agreements](https://developer.apple.com/help/app-store-connect/manage-agreements/sign-and-update-agreements)): "To sell your apps on the App Store or offer In-App Purchases, the Account Holder must sign the Paid Apps Agreement." Also: "You won't be able to create a new app or In-App Purchase until you've agreed to the most recent version of the Paid Apps Agreement." The agreement depends on tax and banking information. That last point comes from third-party guides and is **not verified** against an Apple page.
 
