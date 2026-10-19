@@ -1,0 +1,68 @@
+{
+  "identifier" : "5A1B2C3D",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "35.0",
+      "familyShareable" : false,
+      "internalID" : "6700000001",
+      "localizations" : [
+        {
+          "description" : "A small tip for Mewt's developer",
+          "displayName" : "Treat",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.chaninlaw.Mewt.tip.treat",
+      "referenceName" : "Tip - Treat",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "99.0",
+      "familyShareable" : false,
+      "internalID" : "6700000002",
+      "localizations" : [
+        {
+          "description" : "A generous tip for Mewt's developer",
+          "displayName" : "Tuna Can",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.chaninlaw.Mewt.tip.tuna",
+      "referenceName" : "Tip - Tuna Can",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "349.0",
+      "familyShareable" : false,
+      "internalID" : "6700000003",
+      "localizations" : [
+        {
+          "description" : "A big tip for Mewt's developer",
+          "displayName" : "Cat Tower",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.chaninlaw.Mewt.tip.tower",
+      "referenceName" : "Tip - Cat Tower",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "THA",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

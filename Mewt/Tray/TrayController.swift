@@ -65,6 +65,13 @@ final class TrayController {
         host.sizingOptions = .preferredContentSize
         popover.contentViewController = host
 
+        #if DEBUG
+        // PROTOTYPE (#5): expose the popover so the tip prototype can pin
+        // it during a purchase, and start the Transaction.updates listener.
+        ProtoHooks.popover = popover
+        ProtoTipStore.shared.startListener()
+        #endif
+
         updateButton()
         observeStatus()
     }

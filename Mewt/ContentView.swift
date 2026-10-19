@@ -2,7 +2,7 @@ import KeyboardShortcuts
 import SwiftUI
 
 struct ContentView: View {
-    enum Page: Hashable { case welcome, main, settings }
+    enum Page: Hashable { case welcome, main, settings, support }
 
     @Environment(AppState.self) private var appState
     @State private var page: Page = .main
@@ -12,13 +12,28 @@ struct ContentView: View {
     }
 
     var body: some View {
-        Group {
-            switch effectivePage {
-            case .welcome:  WelcomePage(onContinue: handleWelcomeContinue)
-            case .main:     MainPage(onOpenSettings: { page = .settings })
-            case .settings: SettingsPage(onBack: { page = .main })
+        VStack(spacing: 10) {
+            Group {
+                switch effectivePage {
+                case .welcome:  WelcomePage(onContinue: handleWelcomeContinue)
+                case .main:     MainPage(onOpenSettings: { page = .settings }, onOpenSupport: { page = .support })
+                case .settings: SettingsPage(onBack: { page = .main })
+                case .support:
+                    #if DEBUG
+                    ProtoSupportPage(onBack: { page = .main })
+                    #else
+                    EmptyView()
+                    #endif
+                }
             }
+            #if DEBUG
+            ProtoSwitcherBar()
+            #endif
         }
+        #if DEBUG
+        // PROTOTYPE (#5): "reload on next popover open".
+        .onAppear { Task { await ProtoTipStore.shared.load() } }
+        #endif
         .padding(16)
         .frame(width: 280)
         .animation(.smooth(duration: 0.22), value: effectivePage)
@@ -120,6 +135,7 @@ private struct PrivacyBullet: View {
 private struct MainPage: View {
     @Environment(AppState.self) private var appState
     let onOpenSettings: () -> Void
+    var onOpenSupport: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -163,6 +179,9 @@ private struct MainPage: View {
                 Button("Settings…", action: onOpenSettings)
                     .keyboardShortcut(",")
                 Spacer()
+                #if DEBUG
+                ProtoSupportFooterButton(onOpenSupportPage: onOpenSupport)
+                #endif
                 Button("Quit", role: .destructive) { appState.quit() }
                     .keyboardShortcut("q")
             }
@@ -204,6 +223,10 @@ private struct SettingsPage: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            #if DEBUG
+            ProtoSettingsExtras()
+            #endif
 
             Spacer(minLength: 0)
         }
