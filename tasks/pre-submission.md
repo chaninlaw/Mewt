@@ -120,16 +120,16 @@ Support: https://mewt.nin-070.workers.dev/
 
 ## 8. Support Mewt (tips) — 1.0 scope
 
-Spec: `docs/specs/2026-10-19-mewt-support-and-feedback-design.md`. First IAP must ship together with the 1.0 version in the same submission.
+Spec: `docs/specs/2026-10-19-mewt-support-and-feedback-design.md`. Manual test: `tasks/tips-manual-test.md`. ASC steps: `tasks/app-store-connect-tips.md`. First IAP must ship together with the 1.0 version in the same submission.
 
 - [x] **Implementation** — `Mewt/Support/` (`TipStore`, `StoreKitTipBackend`, `SupportPage`), heart in popover footer, popover pinned during purchase, `Transaction.updates` listener from launch, repo-root `Tips.storekit` (not bundled), `TipStoreTests` + `StoreKitTipBackendTests`
-  - [ ] Click through the Support page by hand in a Debug run (scheme → Run → Options → StoreKit Configuration = `Tips.storekit`)
+  - [ ] Click through the Support page by hand in a Debug run (scheme **Mewt Local Tips**, see `tasks/tips-manual-test.md` Pass A)
 - [x] **Report a Bug** — Email / GitHub Issues buttons in Settings with sanitized diagnostics (spec §6), plus `.github/ISSUE_TEMPLATE/bug_report.yml` + `config.yml` — `AppDiagnostics` + `ReportBugSection`, `AppDiagnosticsTests`
   - [ ] Click Email… and GitHub Issues… by hand once — draft opens with diagnostics; GitHub form's Diagnostics field is prefilled (needs the templates pushed to `main`)
-- [ ] **Paid Applications Agreement** active in App Store Connect, with banking + tax info filled — IAPs can't go live without it, even in a free app
-- [ ] **Create 3 consumables in ASC** — `com.chaninlaw.Mewt.tip.treat` (฿35), `.tuna` (฿99), `.tower` (฿349); each with reference name, en-US display name, description containing "Tip", and a 2880×1800 no-alpha review screenshot of the Support page
+- [x] **Paid Applications Agreement** active in App Store Connect, with banking + tax info filled — IAPs can't go live without it, even in a free app
+- [ ] **Create 3 consumables in ASC** (Treat exists 2026-11-19; Tuna Can + Cat Tower to go, see `tasks/app-store-connect-tips.md`) — `com.chaninlaw.Mewt.tip.treat` (฿35), `.tuna` (฿99), `.tower` (฿349); each with reference name, en-US display name, description containing "Tip", and a 2880×1800 no-alpha review screenshot of the Support page
 - [ ] **Attach the 3 IAPs to the 1.0 version page** before pressing Submit for Review
-- [x] **`site/privacy.html`** — keep "Data Not Collected"; add the payments line: "In-App Purchases (tips) are handled directly by Apple's App Store. Mewt does not receive or store any payment information, billing details, or personal data." — done 2026-11-19, plus a Bug reports section; effective date bumped. Redeploy the site before submitting
+- [x] **`site/privacy.html`** — keep "Data Not Collected"; add the payments line: "In-App Purchases (tips) are handled directly by Apple's App Store. Mewt does not receive or store any payment information, billing details, or personal data." — done 2026-11-19, plus a Bug reports section; effective date bumped. **Deploy = merge to `main`**: Cloudflare Workers Builds is connected to the repo and deploys `site/` on every push to `main`. Check https://mewt.nin-070.workers.dev/privacy shows "Effective date: 19 November 2026". Manual fallback: `npx wrangler deploy` from the repo root
 - [x] **No "Donate" anywhere** — `grep -rni donat Mewt/ site/ tasks/app-store-listing.md` clean (guideline 3.2.2(iv)) — only hit is the internal "never call them donations" note
 - [ ] **Sandbox purchase on a release-like build** — scheme StoreKit Configuration = **None**, dedicated Sandbox Tester (Interrupt Purchases **Off**); buy each tip, confirm thank-you shows and popover stays open, Console shows 0 `deny(1) network-outbound`, then relaunch with Console filtered to `subsystem:com.chaninlaw.Mewt category:TipStore` and expect **no** `Tip delivered via updates` line (proves `finish()` stuck — couldn't be asserted reliably under `SKTestSession`; if it shows, the launch listener finishes it, so worst case is one stale thank-you)
 - [x] **Re-run §1** (Release build, tests, archive) after tips land — 2026-11-19: ARCHIVE SUCCEEDED, entitlements unchanged (no `network.client`), `Tips.storekit` not in bundle, 179/179 tests

@@ -123,6 +123,13 @@ Mewt runs as an `LSUIElement` accessory app using a transient `NSPopover` (`beha
 
 ## 5. Technical Architecture & State Management
 
+> **As built (2026-11-19, PR for #11–#14).** The sketches in §5.1–5.2 below were the plan; the shipped code differs on purpose:
+> - **Seam is `TipStoreBackend`, not `TipStoreControlling`.** `Product` has no public initializer, so a protocol exposing `[Product]` can't be mocked. `TipStore` (concrete, `@Observable`) holds the phase logic over a backend that speaks a plain `TipProduct` value type; `StoreKitTipBackend` is the real one, `MockTipBackend` the test double.
+> - **Always pass a window to `purchase(confirmIn:)`.** On macOS the window-less `product.purchase()` throws `.invalidPresentationContext`, so the `guard let window else { return }` / nil path can't work. The backend falls back to `NSApp.keyWindow`.
+> - **No `TrayController.shared`.** `TrayController` injects two closures into `TipStore` (`presentationWindow`, `setPopoverPinned`) and restores the popover's previous behavior after the purchase.
+> - **`phase` returns to `.ready`** after success, cancel, and thrown errors (the sketch left it in `.purchasing`). A thrown error shows a quiet "didn't go through" note, not the `.failed` state, which is reserved for products failing to load.
+> - **`SKTestSession` can't prove `finish()`** — the finished transaction kept appearing in `Transaction.unfinished` under a hosted test session. That check lives in the manual Sandbox pass (`tasks/pre-submission.md` §8).
+
 ### 5.1 Protocol-Driven StoreKit Manager
 
 To preserve testability and avoid coupling SwiftUI views directly to StoreKit, an injectable protocol is introduced:
