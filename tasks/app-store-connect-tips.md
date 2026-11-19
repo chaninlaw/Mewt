@@ -64,13 +64,37 @@ Users and Access → **Sandbox** → Test Accounts → ＋
 
 On the Mac: System Settings → App Store → *Sandbox Account* → Sign In with the tester.
 
-## 5. Attach to the 1.0 submission
+## 5. Fill in the 1.0 version and submit (current UI, checked against Apple Help Nov 2026)
 
-The first IAPs must go out **with** an app version. They can't be submitted alone.
+Since **15 Jul 2026** the version page no longer has an "In-App Purchases and Subscriptions" picker. IAPs now join the version through a **draft submission**: every IAP and the 1.0 version get **Add for Review** into the *same* draft, then the draft is submitted once. Copy for every field lives in `tasks/app-store-listing.md`.
 
-1. Apps → Mewt Mic → **macOS App → 1.0 Prepare for Submission**
-2. Scroll to **In-App Purchases and Subscriptions** → **＋ / Select** → tick Treat, Tuna Can, Cat Tower → Done
-3. App Review Information → Notes: paste the block from `tasks/pre-submission.md` §6 (it already covers the tips)
-4. When the build is uploaded and everything in `tasks/pre-submission.md` is ticked → **Add for Review → Submit**
+Sources: [Submit an In-App Purchase](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/submit-an-in-app-purchase), [Submit an app](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/submit-an-app), [Manage your App Store assets](https://developer.apple.com/help/app-store-connect/manage-app-information/manage-your-app-store-assets), [Manage app privacy](https://developer.apple.com/help/app-store-connect/manage-app-information/manage-app-privacy), [Release notes](https://developer.apple.com/help/app-store-connect/release-notes/).
 
-Done when: all three IAPs show **Ready to Submit** and they're listed on the 1.0 version page.
+### 5a. App-level pages (sidebar, outside the version)
+
+1. **App Information** (sidebar → General): Primary Category **Utilities**, Secondary **Productivity**; Content Rights → *does not contain third-party content*; **Age Rating** → Edit → answer the questionnaire (all None/No) → expect 4+. Save
+2. **App Privacy** (sidebar): Privacy Policy URL `https://mewt.nin-070.workers.dev/privacy.html` → **Get Started** → *No, we do not collect data from this app* → Save → **Publish** (top right) → Publish
+3. **Pricing and Availability** (sidebar): Price **Free (0.00)**, Availability all countries/regions. Save
+4. **App Compliance** (new page, Nov 2026, holds regulations/permits): nothing applies to Mewt; only open it if ASC flags it as incomplete
+
+### 5b. macOS version page (sidebar → macOS App → **1.0 Prepare for Submission**)
+
+1. **Product Page Information → App Previews and Screenshots** tab → **Mac** tab → drag in the 6 PNGs from `tasks/screenshots/` in order 01…06. (Or upload them in sidebar **Asset Library** → ＋ → *Previews and Screenshots*, then use **Browse Assets** here)
+2. Same section, English (U.S.): **Promotional Text**, **Description**, **Keywords**, **Support URL**, Marketing URL blank. There is no *What's New* field on a first version; that text waits for 1.0.1
+3. **General / Version information**: Copyright `2026 <your legal name>` (shown on the store as-is); Version `1.0`
+4. **Build** → **Add Build** → pick **1.0 (1)** → answer export compliance (uses no non-exempt encryption → *None of the algorithms mentioned above*) if asked
+5. **App Review Information**: *Sign-in required* **off**; contact name, email, phone **in international format** (`+66 …`); **Notes**: paste the block from `tasks/pre-submission.md` §6
+6. **Version Release**: *Manually release this version* (safest for 1.0) or automatic
+7. **Save** (top right)
+
+### 5c. Put everything into one draft submission
+
+1. Sidebar → Monetization → **In-App Purchases** → open **Tip Treat** → **Add for Review** → **Create New Submission** → platform **macOS**, version **1.0**
+2. Open **Tip Tuna Can** → **Add for Review** → choose the **existing draft** (do *not* create a new one)
+3. Same for **Tip Cat Tower**
+4. Back on the **1.0** version page → **Add for Review** (top right) → existing draft. Version status becomes *Ready for Review*
+5. Click **Draft Submissions** (bottom right) or sidebar **App Review** → check it lists macOS App 1.0 + 3 IAPs → **Submit for Review**
+
+If **Add for Review** on an IAP is greyed out, it's missing something (usually the review screenshot or a localization) — the product page shows what. If ASC rejects the draft, the forum workaround is to open the existing draft rather than *Create New Submission*.
+
+Done when: App Review shows one submission *Waiting for Review* containing macOS 1.0 and the three tips.

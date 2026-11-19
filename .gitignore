@@ -11,3 +11,13 @@ build/
 # Python (asset pipeline)
 __pycache__/
 *.pyc
+
+# App Store screenshots (large; regenerated via scripts/screenshots.sh)
+tasks/screenshots/
+
+# Local debug scripts & outputs
+scripts/debug/
+
+# Local tooling / Xcode Cloud workspace metadata
+t3.json
+Mewt.xcodeproj/xcshareddata/xcodecloud/
