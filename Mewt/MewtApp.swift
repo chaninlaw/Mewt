@@ -44,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private(set) var appState: AppState?
     private var tray: TrayController?
+    private var tipStore: TipStore?
     private var overlay: OverlayWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -59,7 +60,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !underTest else { return }
 
         state.start()
-        let tray = TrayController(appState: state)
+
+        // Listen for Transaction.updates from launch (Ask to Buy
+        // approvals, unfinished transactions), not from the popover.
+        let tipStore = TipStore(backend: StoreKitTipBackend())
+        tipStore.startUpdatesListener()
+        self.tipStore = tipStore
+
+        let tray = TrayController(appState: state, tipStore: tipStore)
         tray.install()
         self.tray = tray
 

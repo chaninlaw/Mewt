@@ -79,8 +79,9 @@ final class AppState {
 
     /// Cached snapshot of the system mic-permission state. Refreshed on
     /// `start()` and after `requestMicrophoneAccess()` completes. Drives
-    /// the welcome page and the popover's empty-state copy.
-    private(set) var micPermissionState: MicPermissionState = .notDetermined
+    /// the welcome page and the popover's empty-state copy. Settable
+    /// (internal) so screenshot fixtures can pin a state without TCC.
+    var micPermissionState: MicPermissionState = .notDetermined
 
     /// True once the user has dismissed the welcome card. Persisted so
     /// the welcome page only shows on first launch — even if the user
@@ -198,6 +199,14 @@ final class AppState {
             inputAvailable = false
         }
         hotkeys.start()
+    }
+
+    /// Snapshot for a bug report. Read fresh on tap, never stored.
+    func diagnostics() -> AppDiagnostics {
+        AppDiagnostics.current(
+            inputTransport: muteController.defaultInputTransport(),
+            micPermission: MicPermissionState(AVCaptureDevice.authorizationStatus(for: .audio))
+        )
     }
 
     /// Re-read TCC state. Cheap, synchronous; safe to call on every

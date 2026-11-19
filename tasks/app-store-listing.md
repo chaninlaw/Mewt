@@ -165,5 +165,5 @@ Declare: **Data Not Collected**.
 
 - **Price tier**: Free
 - **Availability**: All territories
-- **In-App Purchases**: None (do **not** configure IAP for 1.0)
+- **In-App Purchases**: 3 consumable tips (Treat / Tuna Can / Cat Tower) — see `tasks/pre-submission.md` §8. Never call them "donations"
 - **Game Center**: Off

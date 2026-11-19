@@ -2,10 +2,16 @@ import KeyboardShortcuts
 import SwiftUI
 
 struct ContentView: View {
-    enum Page: Hashable { case welcome, main, settings }
+    enum Page: Hashable { case welcome, main, settings, support }
 
     @Environment(AppState.self) private var appState
-    @State private var page: Page = .main
+    @State private var page: Page
+
+    /// `initialPage` lets the screenshot pipeline open a sub-page
+    /// directly; the app always starts on `.main`.
+    init(initialPage: Page = .main) {
+        _page = State(initialValue: initialPage)
+    }
 
     private var effectivePage: Page {
         appState.hasCompletedWelcome ? page : .welcome
@@ -15,8 +21,9 @@ struct ContentView: View {
         Group {
             switch effectivePage {
             case .welcome:  WelcomePage(onContinue: handleWelcomeContinue)
-            case .main:     MainPage(onOpenSettings: { page = .settings })
+            case .main:     MainPage(onOpenSettings: { page = .settings }, onOpenSupport: { page = .support })
             case .settings: SettingsPage(onBack: { page = .main })
+            case .support:  SupportPage(onBack: { page = .main })
             }
         }
         .padding(16)
@@ -120,6 +127,7 @@ private struct PrivacyBullet: View {
 private struct MainPage: View {
     @Environment(AppState.self) private var appState
     let onOpenSettings: () -> Void
+    let onOpenSupport: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -163,6 +171,11 @@ private struct MainPage: View {
                 Button("Settings…", action: onOpenSettings)
                     .keyboardShortcut(",")
                 Spacer()
+                Button(action: onOpenSupport) {
+                    Image(systemName: "heart")
+                }
+                .help("Support Mewt")
+                .accessibilityLabel("Support Mewt")
                 Button("Quit", role: .destructive) { appState.quit() }
                     .keyboardShortcut("q")
             }
@@ -204,6 +217,10 @@ private struct SettingsPage: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+
+            ReportBugSection()
 
             Spacer(minLength: 0)
         }
@@ -274,4 +291,5 @@ private struct HotkeyLabel: View {
 #Preview {
     ContentView()
         .environment(AppState())
+        .environment(TipStore(backend: StoreKitTipBackend()))
 }

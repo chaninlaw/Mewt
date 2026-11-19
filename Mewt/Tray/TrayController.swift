@@ -13,6 +13,7 @@ import SwiftUI
 @MainActor
 final class TrayController {
     private let appState: AppState
+    private let tipStore: TipStore
     private var statusItem: NSStatusItem?
     private let popover = NSPopover()
 
@@ -27,8 +28,12 @@ final class TrayController {
     private static let animationFps: Double = 12
     private static let animationFrameCount = 12
 
-    init(appState: AppState) {
+    /// Popover behavior saved while a purchase sheet pins it open.
+    private var behaviorBeforePin: NSPopover.Behavior?
+
+    init(appState: AppState, tipStore: TipStore) {
         self.appState = appState
+        self.tipStore = tipStore
     }
 
     deinit {
@@ -60,10 +65,22 @@ final class TrayController {
         // makes the hosting controller publish ideal-size changes through
         // the proper AppKit channels, breaking the cycle.
         let host = NSHostingController(
-            rootView: ContentView().environment(appState)
+            rootView: ContentView()
+                .environment(appState)
+                .environment(tipStore)
         )
         host.sizingOptions = .preferredContentSize
         popover.contentViewController = host
+
+        // The StoreKit sheet / Apple Account prompt takes focus, which
+        // closes a `.transient` popover mid-purchase. Attach the sheet to
+        // the popover's window and hold the popover open until it's done.
+        tipStore.presentationWindow = { [weak self] in
+            self?.popover.contentViewController?.view.window
+        }
+        tipStore.setPopoverPinned = { [weak self] pinned in
+            self?.setPopoverPinned(pinned)
+        }
 
         updateButton()
         observeStatus()
@@ -85,6 +102,17 @@ final class TrayController {
             onTogglePopover: { [weak self] in self?.togglePopover() },
             onToggleMute: { [weak self] in self?.appState.toggleMute() }
         )
+    }
+
+    private func setPopoverPinned(_ pinned: Bool) {
+        if pinned {
+            guard behaviorBeforePin == nil else { return }
+            behaviorBeforePin = popover.behavior
+            popover.behavior = .applicationDefined
+        } else if let original = behaviorBeforePin {
+            popover.behavior = original
+            behaviorBeforePin = nil
+        }
     }
 
     private func togglePopover() {

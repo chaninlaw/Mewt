@@ -1,5 +1,24 @@
 # Mewt — Task Log
 
+## Now — Code-rendered App Store screenshots (2026-11-19)
+
+Manual captures were blurry (1x popover upscaled) and outdated (no ♥ footer). Replace with a re-runnable pipeline: real SwiftUI views + fixture state, rendered offscreen at 3x onto 2880×1800 brand artboards (style ก: flat brand background, text left, popover right hanging from a mock menu bar).
+
+- [x] `ContentView(initialPage:)` + internal setter for `micPermissionState` (fixture hooks, no behaviour change)
+- [x] `MewtTests/Screenshots/`: artboard view, menu-bar strip, popover chrome, 3x renderer (RGB, no alpha, sRGB)
+- [x] `ScreenshotTests` gated by `MEWT_SCREENSHOTS` env (skipped in normal runs), writes to the sandbox tmp dir
+- [x] `scripts/screenshots.sh`: run the suite, copy PNGs into `tasks/screenshots/`, verify with `sips`
+- [x] 6 shots: 01 hero (talking) · 02 muted · 03 settings/hotkeys · 04 welcome/privacy · 05 menu-bar states · 06 support
+- [x] Rewrite `tasks/screenshots.md` around the pipeline; update `tasks/app-store-listing.md` / ASC guide references
+- [x] Full test suite green; review every PNG by eye
+
+### Review (2026-11-19)
+- 6 shots render in ~7 s; all 2880×1800 RGB no-alpha sRGB. Normal test runs skip the suite (185 pass, 6 skipped).
+- First render had grey prominent buttons: offscreen windows draw inactive. Fixed by a key-capable borderless window parked off-screen + `NSApp.activate`.
+- `talk-*` SVGs use a mask that rasterises soft at 80 pt, so the hero uses the plain cat. Worth checking how the talking mascot looks in the real popover on a Retina screen.
+- App code touched only for fixtures: `ContentView(initialPage:)`, `micPermissionState` setter now internal.
+
+
 ## Now — Retire talkWhileMuted feature (2026-05-07)
 
 User-tested wired USB with macOS 26.4.1: alarm no longer fires. Code path is **identical** to Phase 3 (`0c0f30e`) where verification passed on 2026-04-26 — diff between then and HEAD on `MicMuteController.mute()`, `AudioLevelMonitor`, `TalkingDebouncer`, `AppState.isTalkingWhileMuted` shows no behavioural change. Conclusion: macOS 26.4 → 26.4.1 dot release tightened HAL-mute enforcement so `kAudioDevicePropertyMute = 1` now silences the AVAudioEngine tap on wired devices too. There is no longer a transport on which the feature works (Bluetooth was already off; built-in / USB now match). Aggregate-Device path is the only architectural escape and is too costly relative to the value (target user just wants their mic muted reliably; macOS itself shows the orange-dot indicator). **Decision: rip the feature out cleanly.**
