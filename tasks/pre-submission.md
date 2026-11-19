@@ -62,7 +62,7 @@ Repeat with **Deny** at the system dialog:
 - [x] **Privacy Policy URL** — `https://mewt.nin-070.workers.dev/privacy.html`
 - [x] **Screenshots**: 6 code-rendered artboards in `tasks/screenshots/` (`01-hero-unmuted` … `06-support`), 2880×1800 PNG/sRGB/no-alpha. Regenerate with `scripts/screenshots.sh` after any UI change (see `tasks/screenshots.md`). Ready to upload from disk
 - [ ] **App description** — do **NOT** mention "Mewt Plus $4.99/year" or any paid tier. 1.0 is free with optional tips (see §8) — call them "tips" / "Support Mewt", never "donations"
-- [ ] **Keywords** — from `MARKETING.md`: mute mic, virtual microphone, meeting companion, desk pet, animated mic indicator
+- [ ] **Keywords** — from `MARKETING.md` (canonical): mute mic, microphone, meeting companion, desk pet, mic indicator, push to talk, menu bar
 
 ## 6. App Review Notes (paste into App Store Connect)
 
