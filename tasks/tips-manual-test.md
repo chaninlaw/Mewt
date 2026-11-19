@@ -48,9 +48,10 @@ Needs: all 3 IAPs exist in ASC (status *Ready to Submit* is enough), plus a Sand
 
 **Run:** scheme **Mewt** (no StoreKit config) → ⌘R. Or the `/Applications` build, which is development-signed and so also talks to Sandbox.
 
-- [ ] Support page shows 3 cards with Sandbox prices (THB)
-- [ ] Buy each tip once → Apple sign-in / confirm sheet attaches to the popover and the popover stays open → thank-you
-- [ ] Console filter `deny(1) network-outbound` while buying → **0 lines** for `Mewt Mic`
-- [ ] Quit and relaunch, with Console filtered to `subsystem:com.chaninlaw.Mewt category:TipStore` → **no** `Tip delivered via updates` line. A line there means a transaction wasn't finished. The listener finishes it, so the worst case is one stale thank-you, but tell Claude
+- [x] Support page shows 3 cards with Sandbox prices (THB)
+- [x] Buy each tip once → Apple sign-in / confirm sheet attaches to the popover and the popover stays open → thank-you
+- [x] Console filter `deny(1) network-outbound` while buying → **0 lines** for `Mewt Mic`
+- [x] Quit and relaunch, with Console filtered to `subsystem:com.chaninlaw.Mewt category:TipStore` → **no** `Tip delivered via updates` line. A line there means a transaction wasn't finished. The listener finishes it, so the worst case is one stale thank-you, but tell Claude
+  - 2026-11-19: relaunch showed no `Tip delivered via updates`. Note: in Sandbox the line *does* appear during the same run right after buying (StoreKit also emits the purchase on `Transaction.updates`), giving a second thank-you. Harmless; only lines right after a relaunch mean an unfinished transaction
 
 When both passes are green, tick the two "by hand" sub-items and the Sandbox item in `tasks/pre-submission.md` §8.
