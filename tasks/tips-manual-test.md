@@ -52,6 +52,5 @@ Needs: all 3 IAPs exist in ASC (status *Ready to Submit* is enough), plus a Sand
 - [ ] Buy each tip once → Apple sign-in / confirm sheet attaches to the popover and the popover stays open → thank-you
 - [ ] Console filter `deny(1) network-outbound` while buying → **0 lines** for `Mewt Mic`
 - [ ] Quit and relaunch, with Console filtered to `subsystem:com.chaninlaw.Mewt category:TipStore` → **no** `Tip delivered via updates` line. A line there means a transaction wasn't finished. The listener finishes it, so the worst case is one stale thank-you, but tell Claude
-- [ ] Take the **review screenshot** for ASC now: Support page with the 3 cards (see guide step 3)
 
 When both passes are green, tick the two "by hand" sub-items and the Sandbox item in `tasks/pre-submission.md` §8.

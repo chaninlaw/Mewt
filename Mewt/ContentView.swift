@@ -5,7 +5,13 @@ struct ContentView: View {
     enum Page: Hashable { case welcome, main, settings, support }
 
     @Environment(AppState.self) private var appState
-    @State private var page: Page = .main
+    @State private var page: Page
+
+    /// `initialPage` lets the screenshot pipeline open a sub-page
+    /// directly; the app always starts on `.main`.
+    init(initialPage: Page = .main) {
+        _page = State(initialValue: initialPage)
+    }
 
     private var effectivePage: Page {
         appState.hasCompletedWelcome ? page : .welcome

@@ -51,14 +51,10 @@ Open the existing Treat product and confirm:
 
 ## 3. Review screenshot (all three)
 
-Apple wants one screenshot per IAP showing the purchase in the app. The same image works for all three.
+Apple wants one screenshot per IAP showing the purchase in the app. The same image works for all three: **`tasks/screenshots/06-support.png`** (the Support page with the 3 tip cards, 2880×1800, no alpha).
 
-1. Run the app (Pass A or B in `tasks/tips-manual-test.md`) and open the **Support Mewt** page
-2. Capture it. Either:
-   - full screen ⌘⇧3 on a display set to a 16:10 size, then make sure the file is **2880×1800** (or 2560×1600 / 1440×900 / 1280×800), or
-   - ask Claude to compose a 2880×1800 artboard from a popover capture with the same pipeline as the store screenshots (`tasks/screenshots.md`)
-3. Check: PNG/JPG, RGB, **no alpha**: `sips -g hasAlpha -g pixelWidth -g pixelHeight <file>`
-4. Upload under **Review Information → Screenshot** on each of the three products
+1. If it's missing or the UI changed, regenerate: `scripts/screenshots.sh`
+2. Upload it under **Review Information → Screenshot** on each of the three products
 
 ## 4. Sandbox tester (for the Pass B test)
 

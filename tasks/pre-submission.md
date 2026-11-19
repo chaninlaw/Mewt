@@ -60,7 +60,7 @@ Repeat with **Deny** at the system dialog:
 - [ ] **Privacy Practices** answered: **Data Not Collected** (no analytics, no network)
 - [x] **Support URL** — `https://mewt.nin-070.workers.dev/` (Cloudflare Workers, source in `site/`)
 - [x] **Privacy Policy URL** — `https://mewt.nin-070.workers.dev/privacy.html`
-- [x] **Screenshots**: 5 branded artboards built + verified in `tasks/screenshots/` (`01-hero-unmuted` … `05-menu-bar-states`), all 2880×1800 PNG/sRGB/no-alpha. Real app UI captured via CLI, composited on brand background with baked captions. The retired "Talk-while-muted alert" shot is **not** included. Ready to upload from disk
+- [x] **Screenshots**: 6 code-rendered artboards in `tasks/screenshots/` (`01-hero-unmuted` … `06-support`), 2880×1800 PNG/sRGB/no-alpha. Regenerate with `scripts/screenshots.sh` after any UI change (see `tasks/screenshots.md`). Ready to upload from disk
 - [ ] **App description** — do **NOT** mention "Mewt Plus $4.99/year" or any paid tier. 1.0 is free with optional tips (see §8) — call them "tips" / "Support Mewt", never "donations"
 - [ ] **Keywords** — from `MARKETING.md`: mute mic, virtual microphone, meeting companion, desk pet, animated mic indicator
 
@@ -127,7 +127,7 @@ Spec: `docs/specs/2026-10-19-mewt-support-and-feedback-design.md`. Manual test: 
 - [x] **Report a Bug** — Email / GitHub Issues buttons in Settings with sanitized diagnostics (spec §6), plus `.github/ISSUE_TEMPLATE/bug_report.yml` + `config.yml` — `AppDiagnostics` + `ReportBugSection`, `AppDiagnosticsTests`
   - [ ] Click Email… and GitHub Issues… by hand once — draft opens with diagnostics; GitHub form's Diagnostics field is prefilled (needs the templates pushed to `main`)
 - [x] **Paid Applications Agreement** active in App Store Connect, with banking + tax info filled — IAPs can't go live without it, even in a free app
-- [ ] **Create 3 consumables in ASC** (Treat exists 2026-11-19; Tuna Can + Cat Tower to go, see `tasks/app-store-connect-tips.md`) — `com.chaninlaw.Mewt.tip.treat` (฿35), `.tuna` (฿99), `.tower` (฿349); each with reference name, en-US display name, description containing "Tip", and a 2880×1800 no-alpha review screenshot of the Support page
+- [ ] **Create 3 consumables in ASC** (Treat exists 2026-11-19; Tuna Can + Cat Tower to go, see `tasks/app-store-connect-tips.md`) — `com.chaninlaw.Mewt.tip.treat` (฿35), `.tuna` (฿99), `.tower` (฿349); each with reference name, en-US display name, description containing "Tip", and a 2880×1800 no-alpha review screenshot of the Support page (`tasks/screenshots/06-support.png`)
 - [ ] **Attach the 3 IAPs to the 1.0 version page** before pressing Submit for Review
 - [x] **`site/privacy.html`** — keep "Data Not Collected"; add the payments line: "In-App Purchases (tips) are handled directly by Apple's App Store. Mewt does not receive or store any payment information, billing details, or personal data." — done 2026-11-19, plus a Bug reports section; effective date bumped. **Deploy = merge to `main`**: Cloudflare Workers Builds is connected to the repo and deploys `site/` on every push to `main`. Check https://mewt.nin-070.workers.dev/privacy shows "Effective date: 19 November 2026". Manual fallback: `npx wrangler deploy` from the repo root
 - [x] **No "Donate" anywhere** — `grep -rni donat Mewt/ site/ tasks/app-store-listing.md` clean (guideline 3.2.2(iv)) — only hit is the internal "never call them donations" note
