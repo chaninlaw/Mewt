@@ -22,8 +22,15 @@ struct StoreKitTipBackendTests {
         defer: true
     )
 
+    /// One session for the whole (serialized) suite. Each `SKTestSession`
+    /// talks to storekitagent over its own connection, so a fresh session
+    /// per test let the previous test's teardown (`disableDialogs = false`)
+    /// land after the next test's setup, and a real purchase sheet blocked
+    /// the run. A single session keeps the calls in order.
+    private static let sharedSession = Result { try SKTestSession(contentsOf: configURL) }
+
     private func makeSession() throws -> SKTestSession {
-        let session = try SKTestSession(contentsOf: Self.configURL)
+        let session = try Self.sharedSession.get()
         session.disableDialogs = true
         // Tips.storekit may have Ask to Buy switched on for a manual test.
         session.askToBuyEnabled = false
@@ -37,7 +44,7 @@ struct StoreKitTipBackendTests {
     /// Put everything back so manual testing sees the file's settings.
     private func tearDown(_ session: SKTestSession) {
         session.clearTransactions()
-        session.resetToDefaultState()
+        session.askToBuyEnabled = false
         session.disableDialogs = false
     }
 
