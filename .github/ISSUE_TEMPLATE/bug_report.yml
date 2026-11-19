@@ -1,0 +1,29 @@
+name: Bug report
+description: Something in Mewt isn't working right
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. This issue is **public** — please don't include personal details. Prefer email? Use **Settings → Report a Bug → Email…** in Mewt.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What went wrong, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Prefilled by Mewt when opened from Settings → Report a Bug. Edit or remove anything you like.
+      render: text

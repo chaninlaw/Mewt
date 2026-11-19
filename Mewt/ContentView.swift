@@ -212,6 +212,10 @@ private struct SettingsPage: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
+            Divider()
+
+            ReportBugSection()
+
             Spacer(minLength: 0)
         }
         .transition(.asymmetric(

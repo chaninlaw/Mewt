@@ -200,6 +200,14 @@ final class AppState {
         hotkeys.start()
     }
 
+    /// Snapshot for a bug report. Read fresh on tap, never stored.
+    func diagnostics() -> AppDiagnostics {
+        AppDiagnostics.current(
+            inputTransport: muteController.defaultInputTransport(),
+            micPermission: MicPermissionState(AVCaptureDevice.authorizationStatus(for: .audio))
+        )
+    }
+
     /// Re-read TCC state. Cheap, synchronous; safe to call on every
     /// popover open if needed.
     func refreshMicPermissionState() {

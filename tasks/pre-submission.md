@@ -7,7 +7,7 @@ Use this before pushing a build to App Store Connect. Tracks every reviewer-bloc
 ## 1. Build & Sign
 
 - [x] `xcodebuild -scheme Mewt -configuration Release build` — green
-- [x] `xcodebuild -scheme Mewt test` — 170/170 passing (2026-11-19, incl. tips)
+- [x] `xcodebuild -scheme Mewt test` — 179/179 passing (2026-11-19, incl. tips + bug report)
 - [x] Archive build (`Product → Archive`) succeeds — verified 2026-07-08 via `xcodebuild -scheme Mewt -configuration Release archive` → **ARCHIVE SUCCEEDED**. Re-verified in bundle: `flags=0x10000(runtime)`, entitlements `app-sandbox` + `device.audio-input`, Info.plist `LSUIElement`/utilities/`1.0(1)`, mic usage string correct
 - [x] Code signing: **Developer ID Application** (for notarisation) **or** **Apple Distribution** (for direct App Store)
 - [x] Hardened Runtime enabled (`ENABLE_HARDENED_RUNTIME = YES` in pbxproj — re-verify in archive's `codesign -d --entitlements - <app>` output)
@@ -124,11 +124,12 @@ Spec: `docs/specs/2026-10-19-mewt-support-and-feedback-design.md`. First IAP mus
 
 - [x] **Implementation** — `Mewt/Support/` (`TipStore`, `StoreKitTipBackend`, `SupportPage`), heart in popover footer, popover pinned during purchase, `Transaction.updates` listener from launch, repo-root `Tips.storekit` (not bundled), `TipStoreTests` + `StoreKitTipBackendTests`
   - [ ] Click through the Support page by hand in a Debug run (scheme → Run → Options → StoreKit Configuration = `Tips.storekit`)
-- [ ] **Report a Bug** — Email / GitHub Issues buttons in Settings with sanitized diagnostics (spec §6), plus `.github/ISSUE_TEMPLATE/bug_report.yml` + `config.yml`
+- [x] **Report a Bug** — Email / GitHub Issues buttons in Settings with sanitized diagnostics (spec §6), plus `.github/ISSUE_TEMPLATE/bug_report.yml` + `config.yml` — `AppDiagnostics` + `ReportBugSection`, `AppDiagnosticsTests`
+  - [ ] Click Email… and GitHub Issues… by hand once — draft opens with diagnostics; GitHub form's Diagnostics field is prefilled (needs the templates pushed to `main`)
 - [ ] **Paid Applications Agreement** active in App Store Connect, with banking + tax info filled — IAPs can't go live without it, even in a free app
 - [ ] **Create 3 consumables in ASC** — `com.chaninlaw.Mewt.tip.treat` (฿35), `.tuna` (฿99), `.tower` (฿349); each with reference name, en-US display name, description containing "Tip", and a 2880×1800 no-alpha review screenshot of the Support page
 - [ ] **Attach the 3 IAPs to the 1.0 version page** before pressing Submit for Review
-- [ ] **`site/privacy.html`** — keep "Data Not Collected"; add the payments line: "In-App Purchases (tips) are handled directly by Apple's App Store. Mewt does not receive or store any payment information, billing details, or personal data."
-- [ ] **No "Donate" anywhere** — `grep -rni donat Mewt/ site/ tasks/app-store-listing.md` clean (guideline 3.2.2(iv))
+- [x] **`site/privacy.html`** — keep "Data Not Collected"; add the payments line: "In-App Purchases (tips) are handled directly by Apple's App Store. Mewt does not receive or store any payment information, billing details, or personal data." — done 2026-11-19, plus a Bug reports section; effective date bumped. Redeploy the site before submitting
+- [x] **No "Donate" anywhere** — `grep -rni donat Mewt/ site/ tasks/app-store-listing.md` clean (guideline 3.2.2(iv)) — only hit is the internal "never call them donations" note
 - [ ] **Sandbox purchase on a release-like build** — scheme StoreKit Configuration = **None**, dedicated Sandbox Tester (Interrupt Purchases **Off**); buy each tip, confirm thank-you shows and popover stays open, Console shows 0 `deny(1) network-outbound`, then relaunch with Console filtered to `subsystem:com.chaninlaw.Mewt category:TipStore` and expect **no** `Tip delivered via updates` line (proves `finish()` stuck — couldn't be asserted reliably under `SKTestSession`; if it shows, the launch listener finishes it, so worst case is one stale thank-you)
-- [ ] **Re-run §1** (Release build, tests, archive) after tips land — update test count
+- [x] **Re-run §1** (Release build, tests, archive) after tips land — 2026-11-19: ARCHIVE SUCCEEDED, entitlements unchanged (no `network.client`), `Tips.storekit` not in bundle, 179/179 tests
